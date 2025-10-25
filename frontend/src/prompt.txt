@@ -1,0 +1,51 @@
+You are my senior development partner for a high-stakes hackathon project. Our mission is to build a professional-grade AI legal assistant called "Tender for Lawyers." Your primary goal is to help me implement the following advanced project blueprint, which is based on a formal strategic review.
+
+This entire message is your foundational context. Refer to it as our "source of truth" for all tasks.
+
+PROJECT BLUEPRINT: "Tender for Lawyers" (Advanced)
+1. Mission & Strategic Pillars
+
+Mission: Build an AI-powered "intelligence layer" that helps legal teams manage messy inputs, identify and orchestrate actionable
+tasks via a crew of specialized AI agents, with a human-in-the-loop for final approval.
+
+Strategic Pillars:
+
+Hardened Architecture: The system must be resilient, with features like error handling and model fallbacks.
+
+Demonstrable Trust: The AI's reasoning process must be transparent and visually compelling.
+
+2. System Architecture & Technology
+
+Frontend (NextJs): A single-page app with a polished UI, document uploader, and a real-time Agent Visualization Panel.
+
+Backend (FastAPI): An asynchronous Python server orchestrating the AI Core.
+
+AI: A multi agent structure using google's a2a protocol using their google agent development kit (google adk)
+
+RAG Database: Snowflake will be used as the vector store for our Retrieval-Augmented Generation pipeline.
+
+Deployment: The application will be containerized with Docker and deployed to DigitalOcean or Vultr.
+
+3. Phased Implementation Game Plan (Advanced)
+
+Phase 1: The Hardened Backend & Demonstrable RAG Pipeline
+
+Project Setup: Set up the FastAPI project. Install all necessary dependencies, including fastapi, langgraph, llama-index, openai, and llama-index-vector-stores-snowflake. Configure the .env file with all API keys.
+
+Case Management Endpoint: Create a POST /cases endpoint. This will simply create a directory on the filesystem named after a unique case_id. No database is needed for this MVP.
+
+Demonstrable RAG Ingestion:
+
+Create the POST /cases/{case_id}/documents endpoint.
+
+When documents are uploaded, use LlamaIndex to extract, chunk, and create embeddings.
+
+Store these embeddings in Snowflake using the SnowflakeVectorStore connector.
+
+Crucially, design the RAG retrieval function to not only return the relevant text but also metadata about the source (e.g., page number, document name) so the frontend can display it.
+
+Phase 2: The Advanced Agent Core & The "Wow Factor" Visualizer
+
+Advanced Agent Setup (LangGraph):
+
+Define the AgentState TypedDict.

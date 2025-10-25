@@ -1,0 +1,281 @@
+# A2a startup guide
+
+Python Quickstart Tutorial: Building an A2A Agent¶
+
+Welcome to the Agent2Agent (A2A) Python Quickstart Tutorial!
+
+In this tutorial, you will explore a simple "echo" A2A server using the Python SDK. This will introduce you to the fundamental concepts and components of an A2A server. You will then look at a more advanced example that integrates a Large Language Model (LLM).
+
+This hands-on guide will help you understand:
+
+The basic concepts behind the A2A protocol.
+How to set up a Python environment for A2A development using the SDK.
+How Agent Skills and Agent Cards describe an agent.
+How an A2A server handles tasks.
+How to interact with an A2A server using a client.
+How streaming capabilities and multi-turn interactions work.
+How an LLM can be integrated into an A2A agent.
+By the end of this tutorial, you will have a functional understanding of A2A agents and a solid foundation for building or integrating A2A-compliant applications.
+
+2. Setup Your Environment¶
+
+Prerequisites¶
+
+Python 3.10 or higher.
+Access to a terminal or command prompt.
+Git, for cloning the repository.
+A code editor (e.g., Visual Studio Code) is recommended.
+Clone the Repository¶
+
+If you haven't already, clone the A2A Samples repository:
+
+
+git clone https://github.com/a2aproject/a2a-samples.git -b main --depth 1
+cd a2a-samples
+Python Environment & SDK Installation¶
+
+We recommend using a virtual environment for Python projects. The A2A Python SDK uses uv for dependency management, but you can use pip with venv as well.
+
+Create and activate a virtual environment:
+Using venv (standard library):
+
+Mac/Linux
+Windows
+
+python -m venv .venv
+source .venv/bin/activate
+
+Install needed Python dependencies along with the A2A SDK and its dependencies:
+
+pip install -r samples/python/requirements.txt
+Verify Installation¶
+
+After installation, you should be able to import the a2a package in a Python interpreter:
+
+
+python -c "import a2a; print('A2A SDK imported successfully')"
+If this command runs without error and prints the success message, your environment is set up correctly.
+
+3. Agent Skills & Agent Card
+
+Before an A2A agent can do anything, it needs to define what it can do (its skills) and how other agents or clients can find out about these capabilities (its Agent Card).
+
+We'll use the helloworld example located in a2a-samples/samples/python/agents/helloworld/.
+
+Agent Skills¶
+
+An Agent Skill describes a specific capability or function the agent can perform. It's a building block that tells clients what kinds of tasks the agent is good for.
+
+Key attributes of an AgentSkill (defined in a2a.types):
+
+id: A unique identifier for the skill.
+name: A human-readable name.
+description: A more detailed explanation of what the skill does.
+tags: Keywords for categorization and discovery.
+examples: Sample prompts or use cases.
+inputModes / outputModes: Supported Media Types for input and output (e.g., "text/plain", "application/json").
+In __main__.py, you can see how a skill for the Helloworld agent is defined:
+
+skill = AgentSkill(
+    id='hello_world',
+    name='Returns hello world',
+    description='just returns hello world',
+    tags=['hello world'],
+    examples=['hi', 'hello world'],
+)
+This skill is very simple: it's named "Returns hello world" and primarily deals with text.
+
+Agent Card¶
+
+The Agent Card is a JSON document that an A2A Server makes available, typically at a .well-known/agent-card.json endpoint. It's like a digital business card for the agent.
+
+Key attributes of an AgentCard (defined in a2a.types):
+
+name, description, version: Basic identity information.
+url: The endpoint where the A2A service can be reached.
+capabilities: Specifies supported A2A features like streaming or pushNotifications.
+defaultInputModes / defaultOutputModes: Default Media Types for the agent.
+skills: A list of AgentSkill objects that the agent offers.
+The helloworld example defines its Agent Card like this:
+
+# This will be the public-facing agent card
+public_agent_card = AgentCard(
+    name='Hello World Agent',
+    description='Just a hello world agent',
+    url='http://localhost:9999/',
+    version='1.0.0',
+    default_input_modes=['text'],
+    default_output_modes=['text'],
+    capabilities=AgentCapabilities(streaming=True),
+    skills=[skill],  # Only the basic skill for the public card
+    supports_authenticated_extended_card=True,
+)
+This card tells us the agent is named "Hello World Agent", runs at http://localhost:9999/, supports text interactions, and has the hello_world skill. It also indicates public authentication, meaning no specific credentials are required.
+
+Understanding the Agent Card is crucial because it's how a client discovers an agent and learns how to interact with it.
+
+4. The Agent Executor¶
+
+The core logic of how an A2A agent processes requests and generates responses/events is handled by an Agent Executor. The A2A Python SDK provides an abstract base class a2a.server.agent_execution.AgentExecutor that you implement.
+
+AgentExecutor Interface¶
+
+The AgentExecutor class defines two primary methods:
+
+async def execute(self, context: RequestContext, event_queue: EventQueue): Handles incoming requests that expect a response or a stream of events. It processes the user's input (available via context) and uses the event_queue to send back Message, Task, TaskStatusUpdateEvent, or TaskArtifactUpdateEvent objects.
+async def cancel(self, context: RequestContext, event_queue: EventQueue): Handles requests to cancel an ongoing task.
+The RequestContext provides information about the incoming request, such as the user's message and any existing task details. The EventQueue is used by the executor to send events back to the client.
+
+Helloworld Agent Executor¶
+
+Let's look at agent_executor.py. It defines HelloWorldAgentExecutor.
+
+The Agent (HelloWorldAgent): This is a simple helper class that encapsulates the actual "business logic".
+class HelloWorldAgent:
+    """Hello World Agent."""
+
+    async def invoke(self) -> str:
+        return 'Hello World'
+It has a simple invoke method that returns the string "Hello World".
+The Executor (HelloWorldAgentExecutor): This class implements the AgentExecutor interface.
+__init__:
+class HelloWorldAgentExecutor(AgentExecutor):
+    """Test AgentProxy Implementation."""
+
+    def __init__(self):
+        self.agent = HelloWorldAgent()
+It instantiates the HelloWorldAgent.
+execute:
+async def execute(
+    self,
+    context: RequestContext,
+    event_queue: EventQueue,
+) -> None:
+    result = await self.agent.invoke()
+    await event_queue.enqueue_event(new_agent_text_message(result))
+When a message/send or message/stream request comes in (both are handled by execute in this simplified executor):
+It calls self.agent.invoke() to get the "Hello World" string.
+It creates an A2A Message object using the new_agent_text_message utility function.
+It enqueues this message onto the event_queue. The underlying DefaultRequestHandler will then process this queue to send the response(s) to the client. For a single message like this, it will result in a single response for message/send or a single event for message/stream before the stream closes.
+cancel: The Helloworld example's cancel method simply raises an exception, indicating that cancellation is not supported for this basic agent.
+async def cancel(
+    self, context: RequestContext, event_queue: EventQueue
+) -> None:
+    raise Exception('cancel not supported')
+The AgentExecutor acts as the bridge between the A2A protocol (managed by the request handler and server application) and your agent's specific logic. It receives context about the request and uses an event queue to communicate results or updates back.
+
+5. Starting the Server¶
+
+Now that we have an Agent Card and an Agent Executor, we can set up and start the A2A server.
+
+The A2A Python SDK provides an A2AStarletteApplication class that simplifies running an A2A-compliant HTTP server. It uses Starlette for the web framework and is typically run with an ASGI server like Uvicorn.
+
+Server Setup in Helloworld¶
+
+Let's look at __main__.py again to see how the server is initialized and started.
+
+import uvicorn
+
+from a2a.server.apps import A2AStarletteApplication
+from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.tasks import InMemoryTaskStore
+from a2a.types import (
+    AgentCapabilities,
+    AgentCard,
+    AgentSkill,
+)
+from agent_executor import (
+    HelloWorldAgentExecutor,  # type: ignore[import-untyped]
+)
+
+
+if __name__ == '__main__':
+    skill = AgentSkill(
+        id='hello_world',
+        name='Returns hello world',
+        description='just returns hello world',
+        tags=['hello world'],
+        examples=['hi', 'hello world'],
+    )
+
+    extended_skill = AgentSkill(
+        id='super_hello_world',
+        name='Returns a SUPER Hello World',
+        description='A more enthusiastic greeting, only for authenticated users.',
+        tags=['hello world', 'super', 'extended'],
+        examples=['super hi', 'give me a super hello'],
+    )
+
+    # This will be the public-facing agent card
+    public_agent_card = AgentCard(
+        name='Hello World Agent',
+        description='Just a hello world agent',
+        url='http://localhost:9999/',
+        version='1.0.0',
+        default_input_modes=['text'],
+        default_output_modes=['text'],
+        capabilities=AgentCapabilities(streaming=True),
+        skills=[skill],  # Only the basic skill for the public card
+        supports_authenticated_extended_card=True,
+    )
+
+    # This will be the authenticated extended agent card
+    # It includes the additional 'extended_skill'
+    specific_extended_agent_card = public_agent_card.model_copy(
+        update={
+            'name': 'Hello World Agent - Extended Edition',  # Different name for clarity
+            'description': 'The full-featured hello world agent for authenticated users.',
+            'version': '1.0.1',  # Could even be a different version
+            # Capabilities and other fields like url, default_input_modes, default_output_modes,
+            # supports_authenticated_extended_card are inherited from public_agent_card unless specified here.
+            'skills': [
+                skill,
+                extended_skill,
+            ],  # Both skills for the extended card
+        }
+    )
+
+    request_handler = DefaultRequestHandler(
+        agent_executor=HelloWorldAgentExecutor(),
+        task_store=InMemoryTaskStore(),
+    )
+
+    server = A2AStarletteApplication(
+        agent_card=public_agent_card,
+        http_handler=request_handler,
+        extended_agent_card=specific_extended_agent_card,
+    )
+
+    uvicorn.run(server.build(), host='0.0.0.0', port=9999)
+Let's break this down:
+
+DefaultRequestHandler:
+The SDK provides DefaultRequestHandler. This handler takes your AgentExecutor implementation (here, HelloWorldAgentExecutor) and a TaskStore (here, InMemoryTaskStore).
+It routes incoming A2A RPC calls to the appropriate methods on your executor (like execute or cancel).
+The TaskStore is used by the DefaultRequestHandler to manage the lifecycle of tasks, especially for stateful interactions, streaming, and resubscription. Even if your agent executor is simple, the handler needs a task store.
+A2AStarletteApplication:
+The A2AStarletteApplication class is instantiated with the agent_card and the request_handler (referred to as http_handler in its constructor).
+The agent_card is crucial because the server will expose it at the /.well-known/agent-card.json endpoint (by default).
+The request_handler is responsible for processing all incoming A2A method calls by interacting with your AgentExecutor.
+uvicorn.run(server_app_builder.build(), ...):
+The A2AStarletteApplication has a build() method that constructs the actual Starlette application.
+This application is then run using uvicorn.run(), making your agent accessible over HTTP.
+host='0.0.0.0' makes the server accessible on all network interfaces on your machine.
+port=9999 specifies the port to listen on. This matches the url in the AgentCard.
+Running the Helloworld Server¶
+
+Navigate to the a2a-samples directory in your terminal (if you're not already there) and ensure your virtual environment is activated.
+
+To run the Helloworld server:
+
+
+# from the a2a-samples directory
+python samples/python/agents/helloworld/__main__.py
+You should see output similar to this, indicating the server is running:
+
+INFO:     Started server process [xxxxx]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:9999 (Press CTRL+C to quit)
+Your A2A Helloworld agent is now live and listening for requests! In the next step, we'll interact with it.
+

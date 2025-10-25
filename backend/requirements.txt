@@ -1,0 +1,30 @@
+# Google ADK and AI dependencies
+google-genai
+google-adk
+
+# A2A Protocol
+a2a
+
+# Web framework for A2A server
+starlette
+uvicorn[standard]
+
+# Data processing
+pydantic>=2.0.0
+python-dotenv
+
+# Snowflake integration
+snowflake-connector-python
+snowflake-ml-python
+
+# ElevenLabs integration
+elevenlabs
+
+# Async support
+aiohttp
+asyncio
+
+# Utilities
+python-multipart
+httpx
+

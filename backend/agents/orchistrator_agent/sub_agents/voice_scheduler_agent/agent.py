@@ -1,5 +1,6 @@
 from google.adk.agents import Agent
 from google.adk.tools import google_search
+from google.adk.tools.agent_tool import AgentTool
 
 #can only use one built in tool at a time
 
@@ -12,11 +13,11 @@ def get_current_weather(city: dict) -> dict:
 
     }
 
-root_agent = Agent(
+voice_scheduler_agent = Agent(
     name="voice_scheduler_agent",
     model="gemini-2.5-flash",
     description="calls the client to coordinate and schedule depositions, mediations, or client check-ins.",
-    instructions="""You are the Voice Scheduler Agent, responsible for coordinating and scheduling important legal proceedings and client meetings through direct phone communication. You serve as the primary point of contact for scheduling critical legal activities.
+    instruction="""You are the Voice Scheduler Agent, responsible for coordinating and scheduling important legal proceedings and client meetings through direct phone communication. You serve as the primary point of contact for scheduling critical legal activities.
 
 Your primary responsibilities include:
 
@@ -77,5 +78,5 @@ Your primary responsibilities include:
    - Handle sensitive scheduling matters with discretion
 
 Remember: You are the bridge between legal proceedings and client participation. Your professional communication and meticulous scheduling ensure that all parties are properly coordinated for successful legal proceedings.""",
-    tools=[google_search],
+
 )

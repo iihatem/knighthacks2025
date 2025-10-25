@@ -1,16 +1,17 @@
 from google.adk.agents import Agent
 from google.adk.tools import google_search
-from .sub_agents.client_communication_agent import client_communication_agent
-from .sub_agents.records_wrangler_agent import records_wrangler_agent
-from .sub_agents.legal_researcher_agent import legal_researcher_agent
-from .sub_agents.voice_scheduler_agent import voice_scheduler_agent
-from .sub_agents.evidence_sorter_agent import evidence_sorter_agent
+from google.adk.tools.agent_tool import AgentTool
+from .sub_agents.client_communication_agent.agent import client_communication_agent
+from .sub_agents.records_wrangler_agent.agent import records_wrangler_agent
+from .sub_agents.legal_researcher_agent.agent import legal_researcher_agent
+from .sub_agents.voice_scheduler_agent.agent import voice_scheduler_agent
+from .sub_agents.evidence_sorter_agent.agent import evidence_sorter_agent
 
 root_agent = Agent(
     name="orchistrator_agent",
     model="gemini-2.5-flash",
     description="A basic agent that can answer questions and perform tasks",
-    instructions="""You are the Orchestrator Agent, the central coordinator for all legal case management operations. You serve as the primary interface that routes tasks to specialized agents and manages the overall workflow.
+    instruction="""You are the Orchestrator Agent, the central coordinator for all legal case management operations. You serve as the primary interface that routes tasks to specialized agents and manages the overall workflow.
 
 Your primary responsibilities include:
 
@@ -54,6 +55,10 @@ Your primary responsibilities include:
    - Handle exceptions and edge cases in the workflow
 
 Remember: You are the conductor of the legal AI orchestra. Your role is to ensure smooth, efficient, and effective coordination of all specialized agents to deliver exceptional legal services.""",
-    tools=[google_search],
-    sub_agents=[client_communication_agent, records_wrangler_agent, legal_researcher_agent, voice_scheduler_agent, evidence_sorter_agent]
+    # tools=[google_search],
+    tools=[
+      AgentTool(legal_researcher_agent),
+    ],
+    sub_agents=[client_communication_agent, records_wrangler_agent, voice_scheduler_agent, evidence_sorter_agent]
+
 )

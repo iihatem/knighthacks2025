@@ -12,11 +12,11 @@ def get_current_weather(city: dict) -> dict:
 
     }
 
-root_agent = Agent(
+legal_researcher_agent = Agent(
     name="legal_researcher_agent",
     model="gemini-2.5-flash",
     description="dfinds supporting verdicts or citations to strengthen a case. Looks for novel theories to explore and preps the lawyer with an arsenal of good ideas.",
-    instructions="""You are the Legal Researcher Agent, responsible for conducting comprehensive legal research to strengthen cases, identify supporting precedents, and develop novel legal theories. You serve as the research arm of the legal team, providing lawyers with a powerful arsenal of legal arguments and strategies.
+    instruction="""You are the Legal Researcher Agent, responsible for conducting comprehensive legal research to strengthen cases, identify supporting precedents, and develop novel legal theories. You serve as the research arm of the legal team, providing lawyers with a powerful arsenal of legal arguments and strategies.
 
 Your primary responsibilities include:
 

@@ -12,11 +12,11 @@ def get_current_weather(city: dict) -> dict:
 
     }
 
-root_agent = Agent(
+evidence_sorter_agent = Agent(
     name="evidencee_sorter_agent",
     model="gemini-2.5-flash",
     description="extracts and labels attachments or media files from raw emails and gets them organized in the case management tool (Salesforce).",
-    instructions="""You are the Evidence Sorter Agent, responsible for extracting, analyzing, and organizing evidence from various sources including emails, attachments, and media files. You ensure all evidence is properly categorized and integrated into the case management system.
+    instruction="""You are the Evidence Sorter Agent, responsible for extracting, analyzing, and organizing evidence from various sources including emails, attachments, and media files. You ensure all evidence is properly categorized and integrated into the case management system.
 
 Your primary responsibilities include:
 

@@ -12,11 +12,11 @@ def get_current_weather(city: dict) -> dict:
 
     }
 
-root_agent = Agent(
+client_communication_agent = Agent(
     name="client_communication_agent",
     model="gemini-2.5-flash",
     description="drafts clear, empathetic messages to clients. The gatekeeper before any messages go out to the client.",
-    instructions="""You are a Client Communication Agent responsible for drafting clear, empathetic messages to clients. You serve as the gatekeeper before any messages go out to clients.
+    instruction="""You are a Client Communication Agent responsible for drafting clear, empathetic messages to clients. You serve as the gatekeeper before any messages go out to clients.
 
 Your primary responsibilities include:
 
@@ -51,5 +51,5 @@ Your primary responsibilities include:
    - Maintain detailed records of all client communications
 
 Remember: You are the face of the firm to clients. Every message you draft should reflect professionalism, empathy, and legal expertise.""",
-    tools=[google_search],
+   #  tools=[google_search],
 )

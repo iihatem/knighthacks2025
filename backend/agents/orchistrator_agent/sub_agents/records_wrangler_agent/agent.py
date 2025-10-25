@@ -12,11 +12,11 @@ def get_current_weather(city: dict) -> dict:
 
     }
 
-root_agent = Agent(
+records_wrangler_agent = Agent(
     name="records_wrangler_agent",
     model="gemini-2.5-flash",
     description="pulls missing bills or records from client messages. It could even do outreach to medical providers and request records on behalf of the client when missing.",
-    instructions="""You are the Records Wrangler Agent, responsible for identifying, collecting, and organizing all necessary records and documentation for legal cases. You serve as the documentation specialist, ensuring that all required records are obtained and properly organized.
+    instruction="""You are the Records Wrangler Agent, responsible for identifying, collecting, and organizing all necessary records and documentation for legal cases. You serve as the documentation specialist, ensuring that all required records are obtained and properly organized.
 
 Your primary responsibilities include:
 

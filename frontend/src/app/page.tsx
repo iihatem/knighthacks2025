@@ -1,203 +1,305 @@
 "use client";
 
-import { useState, FormEvent } from 'react';
+import Dashboard from "@/components/Dashboard";
+import Link from "next/link";
+import AddCaseModal from "@/components/AddCaseModal";
+import { useState } from "react";
 
-export default function CreateCasePage() {
-  const [status, setStatus] = useState({ message: '', type: '' });
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedFiles(e.target.files);
-  };
-
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setStatus({ message: 'Uploading and processing files... This may take a moment.', type: 'loading' });
-
-    const formData = new FormData(e.currentTarget);
-
-    try {
-      // **IMPORTANT:** We fetch from port 5001, where your Python backend is running
-      const response = await fetch('http://127.0.0.1:5001/api/create-case', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        setStatus({ message: `Success! Case created. You will be redirected...`, type: 'success' });
-        // Redirect to the new dashboard page (which you'll build in Phase 2)
-        setTimeout(() => {
-          window.location.href = `/dashboard?case_id=${result.case_id}`;
-        }, 2000);
-      } else {
-        throw new Error(result.message || 'An unknown error occurred.');
-      }
-    } catch (error: any) {
-      setStatus({ message: `Error: ${error.message}`, type: 'error' });
-      setIsLoading(false);
-    }
-  };
+export default function Home() {
+  const [isAddCaseModalOpen, setIsAddCaseModalOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 py-12 px-4">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-slate-900 mb-2">
-            ⚖️ Tender for Lawyers
-          </h1>
-          <p className="text-slate-600 text-lg">
-            AI-Powered Legal Case Management for Morgan & Morgan
-          </p>
-        </div>
-
-        {/* Main Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
-          <div className="mb-6">
-            <h2 className="text-2xl font-semibold text-slate-800 mb-2">
-              Create a New Case
-            </h2>
-            <p className="text-slate-600">
-              Upload case documents and our AI will automatically analyze and organize them
-            </p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Case Name Input */}
-            <div>
-              <label htmlFor="case-name" className="block text-sm font-medium text-slate-700 mb-2">
-                Case Name
-              </label>
-              <input
-                type="text"
-                id="case-name"
-                name="case_name"
-                placeholder="e.g., Smith vs. Johnson Auto Accident"
-                required
-                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-slate-900 placeholder-slate-400"
-              />
-            </div>
-
-            {/* File Upload */}
-            <div>
-              <label htmlFor="case-files" className="block text-sm font-medium text-slate-700 mb-2">
-                Case Documents
-              </label>
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-slate-300 border-dashed rounded-lg hover:border-blue-400 transition-colors bg-slate-50">
-                <div className="space-y-2 text-center">
+    <Dashboard>
+      <div className="space-y-6">
+        {/* Two Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Recent Cases */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">
+                Recent Cases
+              </h3>
+              <div className="flex items-center space-x-3">
+                <Link
+                  href="/cases"
+                  className="text-sm text-orange-600 hover:text-orange-700 font-medium"
+                >
+                  View all
+                </Link>
+                <button
+                  onClick={() => setIsAddCaseModalOpen(true)}
+                  className="px-3 py-1.5 bg-orange-500 text-white rounded-md hover:bg-orange-600 transition-colors duration-200 flex items-center space-x-2"
+                >
                   <svg
-                    className="mx-auto h-12 w-12 text-slate-400"
-                    stroke="currentColor"
+                    className="h-4 w-4"
                     fill="none"
-                    viewBox="0 0 48 48"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
                   >
                     <path
-                      d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                      strokeWidth={2}
                       strokeLinecap="round"
                       strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 6v6m0 0v6m0-6h6m-6 0H6"
                     />
                   </svg>
-                  <div className="flex text-sm text-slate-600">
-                    <label
-                      htmlFor="case-files"
-                      className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 px-2"
+                  <span className="text-sm font-medium">Add Case</span>
+                </button>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <Link href="/case/personal-injury-case" className="block">
+                <div className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200 cursor-pointer">
+                  <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center mr-3">
+                    <svg
+                      className="h-5 w-5 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
                     >
-                      <span>Upload files</span>
-                      <input
-                        id="case-files"
-                        name="files"
-                        type="file"
-                        multiple
-                        required
-                        onChange={handleFileChange}
-                        className="sr-only"
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                       />
-                    </label>
-                    <p className="pl-1">or drag and drop</p>
+                    </svg>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    PDF, TXT, JPG, PNG up to 10MB each
-                  </p>
-                  {selectedFiles && selectedFiles.length > 0 && (
-                    <div className="mt-3 text-sm text-slate-700 bg-white rounded-lg p-3 border border-slate-200">
-                      <p className="font-medium">{selectedFiles.length} file(s) selected:</p>
-                      <ul className="mt-2 space-y-1 text-xs text-slate-600 text-left">
-                        {Array.from(selectedFiles).map((file, idx) => (
-                          <li key={idx} className="flex items-center">
-                            <span className="mr-2">📄</span>
-                            <span className="truncate">{file.name}</span>
-                          </li>
-                        ))}
-                      </ul>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-800">
+                      Personal Injury Case
+                    </h4>
+                    <p className="text-sm text-gray-600">Client: John Smith</p>
+                    <div className="flex items-center mt-1">
+                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                        Active
+                      </span>
+                      <span className="ml-2 text-xs text-gray-500">
+                        2 days ago
+                      </span>
                     </div>
-                  )}
+                  </div>
+                </div>
+              </Link>
+
+              <Link href="/case/contract-dispute" className="block">
+                <div className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200 cursor-pointer">
+                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center mr-3">
+                    <svg
+                      className="h-5 w-5 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-800">
+                      Contract Dispute
+                    </h4>
+                    <p className="text-sm text-gray-600">Client: ABC Corp</p>
+                    <div className="flex items-center mt-1">
+                      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                        Pending
+                      </span>
+                      <span className="ml-2 text-xs text-gray-500">
+                        1 week ago
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+
+              <Link href="/case/employment-law" className="block">
+                <div className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200 cursor-pointer">
+                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center mr-3">
+                    <svg
+                      className="h-5 w-5 text-white"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-gray-800">
+                      Employment Law
+                    </h4>
+                    <p className="text-sm text-gray-600">Client: Jane Doe</p>
+                    <div className="flex items-center mt-1">
+                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                        Completed
+                      </span>
+                      <span className="ml-2 text-xs text-gray-500">
+                        2 weeks ago
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            </div>
+          </div>
+
+          {/* Recent Activity */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">
+                Recent Activity
+              </h3>
+              <a
+                href="#"
+                className="text-sm text-orange-600 hover:text-orange-700 font-medium"
+              >
+                View all
+              </a>
+            </div>
+            <div className="space-y-4">
+              <div className="flex items-start">
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3 mt-1">
+                  <svg
+                    className="h-4 w-4 text-green-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-800">
+                    <span className="font-medium">Email sent</span> to John
+                    Smith regarding Personal Injury Case
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">2 hours ago</p>
+                </div>
+              </div>
+
+              <div className="flex items-start">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3 mt-1">
+                  <svg
+                    className="h-4 w-4 text-blue-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-800">
+                    <span className="font-medium">New case added</span> -
+                    Contract Dispute for ABC Corp
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">1 day ago</p>
+                </div>
+              </div>
+
+              <div className="flex items-start">
+                <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center mr-3 mt-1">
+                  <svg
+                    className="h-4 w-4 text-orange-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-800">
+                    <span className="font-medium">Document uploaded</span> -
+                    Medical records for Personal Injury Case
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">3 days ago</p>
+                </div>
+              </div>
+
+              <div className="flex items-start">
+                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3 mt-1">
+                  <svg
+                    className="h-4 w-4 text-purple-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-800">
+                    <span className="font-medium">Court date scheduled</span>{" "}
+                    for Employment Law case
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">1 week ago</p>
+                </div>
+              </div>
+
+              <div className="flex items-start">
+                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mr-3 mt-1">
+                  <svg
+                    className="h-4 w-4 text-red-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
+                    />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-800">
+                    <span className="font-medium">Deadline reminder</span> -
+                    Contract review due tomorrow
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">2 weeks ago</p>
                 </div>
               </div>
             </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className={`w-full py-4 px-6 rounded-lg font-semibold text-white text-lg transition-all shadow-lg ${
-                isLoading
-                  ? 'bg-slate-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 hover:shadow-xl active:scale-95'
-              }`}
-            >
-              {isLoading ? (
-                <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Processing Files...
-                </span>
-              ) : (
-                '🚀 Create Case & Analyze Documents'
-              )}
-            </button>
-          </form>
-
-          {/* Status Messages */}
-          {status.message && (
-            <div className={`mt-6 p-4 rounded-lg ${
-              status.type === 'success' ? 'bg-green-50 border border-green-200' :
-              status.type === 'error' ? 'bg-red-50 border border-red-200' :
-              'bg-blue-50 border border-blue-200'
-            }`}>
-              <p className={`font-medium ${
-                status.type === 'success' ? 'text-green-800' :
-                status.type === 'error' ? 'text-red-800' :
-                'text-blue-800'
-              }`}>
-                {status.type === 'success' && '✅ '}
-                {status.type === 'error' && '❌ '}
-                {status.type === 'loading' && '⏳ '}
-                {status.message}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Feature Pills */}
-        <div className="mt-8 flex flex-wrap gap-3 justify-center">
-          <div className="px-4 py-2 bg-white rounded-full shadow-sm border border-slate-200 text-sm text-slate-700">
-            🤖 AI Document Analysis
-          </div>
-          <div className="px-4 py-2 bg-white rounded-full shadow-sm border border-slate-200 text-sm text-slate-700">
-            🔍 Semantic Search
-          </div>
-          <div className="px-4 py-2 bg-white rounded-full shadow-sm border border-slate-200 text-sm text-slate-700">
-            ☁️ Cloud Storage
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Add Case Modal */}
+      <AddCaseModal
+        isOpen={isAddCaseModalOpen}
+        onClose={() => setIsAddCaseModalOpen(false)}
+      />
+    </Dashboard>
   );
 }

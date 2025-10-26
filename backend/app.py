@@ -699,6 +699,47 @@ def test_embedding():
             ] if is_permission_error else ["Check Flask logs for detailed error"]
         }), 500
 
-# --- 5. RUN THE SERVER ---
+
+# --- 5. AI AGENT ORCHESTRATION ---
+
+@app.route('/api/agent/process', methods=['POST'])
+def process_with_agent():
+    """
+    Process a task using the AI orchestrator
+    
+    Request: {"case_id": "123", "query": "Draft email to client about settlement"}
+    Response: {"status": "success", "result": {...}}
+    """
+    try:
+        from agents.orchistrator_agent.agent import orchestrator
+        
+        data = request.json
+        case_id = data.get('case_id')
+        query = data.get('query')
+        
+        if not case_id or not query:
+            return jsonify({"status": "error", "message": "Missing case_id or query"}), 400
+        
+        # Get case context from RAG if available
+        case_context = ""
+        try:
+            # Simple context retrieval - you can enhance this
+            case_context = f"Case {case_id} context"
+        except:
+            pass
+        
+        # Run orchestrator
+        result = orchestrator(case_id, query, case_context)
+        
+        return jsonify({"status": "success", "result": result}), 200
+        
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Error in process_with_agent: {error_details}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# --- 6. RUN THE SERVER ---
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5001)

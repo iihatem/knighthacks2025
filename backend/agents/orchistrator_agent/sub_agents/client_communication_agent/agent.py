@@ -1,12 +1,42 @@
-from google.adk.agents import Agent
-from google.adk.tools import google_search
+"""Client Communication Guru - Empathetic message drafting specialist"""
+import os
+import google.generativeai as genai
+from tools.communication_tools import draft_email
 
-#can only use one built in tool at a time
+def client_communication_guru(case_context: str, task: str) -> dict:
+    """
+    Draft empathetic client communications using Gemini
+    
+    Args:
+        case_context: Context about the case
+        task: What communication is needed
+    
+    Returns:
+        dict with 'draft' and 'requires_approval'
+    """
+    
+    # Configure Gemini
+    genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+    model = genai.GenerativeModel('gemini-2.5-flash')
+    
+    prompt = f"""You are the Client Communication Guru for Morgan & Morgan law firm.
 
-### add your own python function
-def get_current_weather(city: dict) -> dict:
+Case Context:
+{case_context}
 
-    """Get the current weather for a given city"""
+Task: {task}
+
+Draft a clear, empathetic message for the client. Be professional yet warm.
+Use plain English (no legal jargon). Show empathy. Be transparent about next steps.
+
+Format as email if appropriate, otherwise as a message.
+"""
+
+    response = model.generate_content(prompt)
+    
+    # Extract text from Gemini response
+    draft_text = response.candidates[0].content.parts[0].text
+    
     return {
         
         "weather": f"The weather in {city} is sunny"
@@ -52,6 +82,5 @@ Your primary responsibilities include:
    - Maintain detailed records of all client communications
 
 Remember: You are the face of the firm to clients. Every message you draft should reflect professionalism, empathy, and legal expertise.""",
-
-   tools=[get_current_weather],
+   #  tools=[google_search],
 )

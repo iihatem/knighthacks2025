@@ -245,15 +245,39 @@ Respond in JSON format:
         
     elif action_type == 'research_internal':
         # Internal RAG search - NO APPROVAL NEEDED
-        agent_response = {
-            'action_type': action_type,
-            'message': f'Conducting internal case file search...',
-            'note': 'RAG search processes queries without approval',
-            'query': query
-        }
+        # Use the case_context that was already retrieved via RAG
+        if case_context and len(case_context.strip()) > 0:
+            # Generate a comprehensive answer using the RAG context
+            research_prompt = f"""You are a legal research assistant. Based on the case files provided below, answer the user's question comprehensively.
+
+Case Files Context:
+{case_context}
+
+User Question: {query}
+
+Provide a detailed answer based on the case files. If the information is not in the case files, clearly state that.
+"""
+            research_response = model.generate_content(research_prompt)
+            research_answer = research_response.candidates[0].content.parts[0].text
+            
+            agent_response = {
+                'action_type': action_type,
+                'message': research_answer,
+                'context_found': True,
+                'query': query
+            }
+            response_message = research_answer
+        else:
+            # No context found
+            agent_response = {
+                'action_type': action_type,
+                'message': "I couldn't find relevant information in the case files for this query.",
+                'context_found': False,
+                'query': query
+            }
+            response_message = "I couldn't find relevant information in the case files for this query."
         
         # NO activity log - just store in session
-        response_message = f"Searching case files: {query}"
         
     else:
         # General query - NO APPROVAL NEEDED

@@ -46,7 +46,7 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [showCaseSelector, setShowCaseSelector] = useState(false);
-  const [isChatMinimized, setIsChatMinimized] = useState(false);
+  const [isChatMinimized, setIsChatMinimized] = useState(true); // Changed to true - minimized by default
 
   const pathname = usePathname();
   const { cases, loading: casesLoading } = useCases();
@@ -262,7 +262,7 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
         <main className="flex-1 p-6 overflow-hidden">{children}</main>
 
         {/* Floating Chat - Minimized Button (Futuristic) */}
-        {isChatMinimized && (
+        {isChatMinimized && !pathname.startsWith('/case/') && (
           <div className="fixed bottom-8 right-8 z-40 animate-fadeIn">
             <button
               onClick={() => setIsChatMinimized(false)}
@@ -293,7 +293,7 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
         )}
 
         {/* Floating Chat - Expanded (Futuristic Design) */}
-        {!isChatMinimized && (
+        {!isChatMinimized && !pathname.startsWith('/case/') && (
           <div className="fixed bottom-6 right-6 z-40 w-full max-w-2xl animate-fadeIn">
             <div
               className="rounded-3xl shadow-2xl border backdrop-blur-xl overflow-hidden"

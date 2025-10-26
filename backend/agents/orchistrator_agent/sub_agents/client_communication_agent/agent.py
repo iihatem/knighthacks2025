@@ -60,7 +60,16 @@ def client_communication_guru(case_context: str, task: str, case_id: str = None,
     # Extract first name for personalized greeting
     first_name = client_name.split()[0] if client_name != "Valued Client" else client_name
     
-    prompt = f"""You are the Client Communication Handler for Morgan & Morgan law firm.
+    # Get current date for context
+    from datetime import datetime, timedelta
+    today = datetime.now()
+    tomorrow = today + timedelta(days=1)
+    tomorrow_formatted = tomorrow.strftime("%A, %B %d, %Y")  # e.g., "Monday, October 27, 2025"
+    
+    prompt = f"""You are a Paralegal at Morgan & Morgan law firm drafting client communications.
+
+Today's Date: {today.strftime("%B %d, %Y")}
+Tomorrow's Date: {tomorrow_formatted}
 
 Client Name: {client_name}
 
@@ -72,6 +81,11 @@ Task: {task}
 Draft a clear, empathetic email message for the client. Be professional yet warm.
 Use plain English (no legal jargon). Show empathy. Be transparent about next steps.
 
+IMPORTANT DETAILS:
+- If scheduling appointments or meetings, suggest tomorrow's date ({tomorrow_formatted}) as the timing
+- If asking for availability, mention "tomorrow" or provide tomorrow's date
+- When mentioning dates, use the actual date format (not "tomorrow" unless asking for their availability)
+
 CRITICAL FORMATTING RULES:
 - Do NOT include "Subject:" in your response - the subject line is handled separately
 - Start directly with the greeting: "Dear {first_name},"
@@ -79,8 +93,8 @@ CRITICAL FORMATTING RULES:
 - Sign off with:
   
   Sincerely,
-  Client Communication Handler
-  Morgan & Morgan
+  Paralegal
+  Morgan & Morgan, P.A.
 
 - Do NOT add any contact details, phone numbers, or email addresses
 - Write ONLY the email body content (greeting to signature)
@@ -94,8 +108,8 @@ Dear {first_name},
 [Second paragraph...]
 
 Sincerely,
-Client Communication Handler
-Morgan & Morgan
+Paralegal
+Morgan & Morgan, P.A.
 """
 
     response = model.generate_content(prompt)
@@ -103,12 +117,26 @@ Morgan & Morgan
     # Extract the draft from the response
     draft_text = response.text.strip()
     
+    # Generate appropriate subject line based on task
+    subject_line = "Case Update"  # Default
+    task_lower = task.lower()
+    if "schedul" in task_lower or "appointment" in task_lower or "meeting" in task_lower:
+        subject_line = "Appointment Scheduling - Your Case"
+    elif "settlement" in task_lower or "offer" in task_lower:
+        subject_line = "Settlement Update - Your Case"
+    elif "document" in task_lower or "sign" in task_lower:
+        subject_line = "Documents Required - Your Case"
+    elif "evidence" in task_lower or "information" in task_lower:
+        subject_line = "Information Request - Your Case"
+    elif "update" in task_lower or "status" in task_lower:
+        subject_line = "Case Status Update"
+    
     # Prepare return data
     result = {
         "draft": draft_text,
         "to": client_email if client_email else "client",
         "to_name": client_name,
-        "subject": "Case Update",  # Could be enhanced to extract from task
+        "subject": subject_line,
         "requires_approval": True
     }
     

@@ -98,7 +98,7 @@ def rag_search(case_id, query_text, top_k=5):
                 SELECT 
                     text_chunk,
                     source_url,
-                    VECTOR_COSINE_SIMILARITY(vector_embedding, PARSE_JSON(%s)) AS similarity_score
+                    VECTOR_COSINE_SIMILARITY(vector_embedding, PARSE_JSON(%s)::VECTOR(FLOAT, 768)) AS similarity_score
                 FROM case_data
                 WHERE case_id = %s
                 ORDER BY similarity_score DESC
@@ -1061,6 +1061,50 @@ def test_embedding():
 
 # --- 5. AI ORCHESTRATOR FUNCTION ---
 
+def clean_markdown_formatting(text: str) -> str:
+    """
+    Remove markdown formatting from text for clean display in chat
+    
+    Args:
+        text: Text with markdown formatting
+    
+    Returns:
+        Clean text without markdown indicators
+    """
+    import re
+    
+    # Remove markdown headers (##, ###, etc.)
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+    
+    # Remove bold/italic markers (**text**, *text*, __text__, _text_)
+    text = re.sub(r'\*\*\*(.+?)\*\*\*', r'\1', text)  # Bold italic
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)      # Bold
+    text = re.sub(r'__(.+?)__', r'\1', text)          # Bold
+    text = re.sub(r'\*(.+?)\*', r'\1', text)          # Italic
+    text = re.sub(r'_(.+?)_', r'\1', text)            # Italic
+    
+    # Remove code blocks (```text```)
+    text = re.sub(r'```[\s\S]*?```', '', text)
+    text = re.sub(r'`(.+?)`', r'\1', text)            # Inline code
+    
+    # Remove bullet point markers (*, -, +) but keep the content
+    text = re.sub(r'^\s*[\*\-\+]\s+', '  • ', text, flags=re.MULTILINE)
+    
+    # Remove numbered list markers but keep the content
+    text = re.sub(r'^\s*\d+\.\s+', '  ', text, flags=re.MULTILINE)
+    
+    # Remove horizontal rules (---, ___, ***)
+    text = re.sub(r'^[\-_\*]{3,}\s*$', '', text, flags=re.MULTILINE)
+    
+    # Remove excess blank lines (more than 2 consecutive newlines)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    
+    # Clean up leading/trailing whitespace
+    text = text.strip()
+    
+    return text
+
+
 def orchestrator(case_id: str, query: str, case_context: str = "", session_id: str = None) -> dict:
     """
     Main orchestrator that routes tasks to specialist agents with smart session management.
@@ -1123,14 +1167,16 @@ Action types:
 - research_external: Web search, case law databases (NO APPROVAL)  
 - draft_email: Draft email to client/opposing counsel (REQUIRES APPROVAL)
 - schedule_appointment: Schedule deposition/mediation (REQUIRES APPROVAL)
+- sort_evidence: Organize and categorize evidence files/emails (NO APPROVAL)
+- request_records: Request medical records or documents from providers (REQUIRES APPROVAL)
 - general_query: General question, analysis (NO APPROVAL)
 
 Respond in JSON format:
 {{
   "is_continuation": true or false,
   "topic": "Brief description of topic",
-  "action_type": "research_internal|research_external|draft_email|schedule_appointment|general_query",
-  "agent_type": "LegalResearcher|ClientCommunicationGuru|VoiceBotScheduler|Orchestrator",
+  "action_type": "research_internal|research_external|draft_email|schedule_appointment|sort_evidence|request_records|general_query",
+  "agent_type": "LegalResearcher|ClientCommunicationGuru|VoiceBotScheduler|EvidenceSorter|RecordsWrangler|Orchestrator",
   "requires_approval": true or false,
   "reasoning": "Why you made this determination"
 }}
@@ -1222,12 +1268,14 @@ Respond in JSON format:
             }
         
         # REQUIRES APPROVAL - Log activity immediately
+        # Store ONLY the draft text in agent_response (not the entire JSON)
+        # Store subject and recipient in action_data
         activity_id = log_agent_activity(
             case_id=case_id,
             agent_type='ClientCommunicationGuru',
             agent_action='draft_email',
             prompt=query,
-            agent_response=json.dumps(agent_response),
+            agent_response=agent_response.get('draft', ''),  # Only the draft text
             action_data={
                 'draft': agent_response.get('draft', ''),
                 'to': agent_response.get('to', 'Unknown client'),
@@ -1359,6 +1407,84 @@ Provide:
         
         # NO approval needed
         
+    elif action_type == 'sort_evidence':
+        # Evidence sorting - analyze and categorize evidence
+        evidence_prompt = f"""You are an evidence organization specialist. Analyze the user's request about evidence.
+
+User Request: {query}
+Case Context: {case_context}
+
+Provide guidance on:
+1. What types of evidence should be collected
+2. How to categorize the evidence
+3. What information to extract from each piece
+4. How to organize it for the case"""
+
+        evidence_analysis = model.generate_content(evidence_prompt)
+        response_message = evidence_analysis.candidates[0].content.parts[0].text
+        
+        agent_response = {
+            'action_type': 'sort_evidence',
+            'guidance': response_message
+        }
+        
+        # Log activity (no approval needed for evidence sorting)
+        from services.activity_logger import log_agent_activity
+        log_agent_activity(
+            case_id=case_id,
+            agent_type='EvidenceSorter',
+            agent_action='analyze_evidence',
+            prompt=query,
+            agent_response=response_message,
+            action_data=None,
+            requires_approval=False,
+            session_id=current_session
+        )
+        
+    elif action_type == 'request_records':
+        # Records wrangler - draft request for medical records or documents
+        records_prompt = f"""You are a medical records specialist for a law firm. Draft a formal request for records.
+
+User Request: {query}
+Case Context: {case_context}
+
+Create a professional request including:
+- Specific records needed
+- Date range required
+- Patient/client information
+- Proper legal authorization language
+- Contact information for response
+
+Format as a complete letter ready to send."""
+
+        records_response = model.generate_content(records_prompt)
+        records_text = records_response.candidates[0].content.parts[0].text
+        
+        # Parse the request details
+        agent_response = {
+            'request_type': 'medical_records',
+            'request_letter': records_text,
+            'status': 'pending_approval'
+        }
+        
+        # REQUIRES APPROVAL - Log activity
+        activity_id = log_agent_activity(
+            case_id=case_id,
+            agent_type='RecordsWrangler',
+            agent_action='request_records',
+            prompt=query,
+            agent_response=records_text,
+            action_data={
+                'request_letter': records_text,
+                'request_type': 'medical_records'
+            },
+            requires_approval=True,
+            session_id=current_session
+        )
+        activity_logged = True
+        
+        response_message = "I've prepared a formal records request for your approval. Please review it below."
+        
     else:
         # General query
         general_prompt = f"""You are a helpful legal AI assistant.
@@ -1375,10 +1501,13 @@ Provide a helpful, professional response."""
             'message': response_message
         }
     
-    # Step 6: Store agent response in session
-    store_message(current_session, 'agent', response_message)
+    # Step 6: Clean up markdown formatting from response
+    cleaned_response = clean_markdown_formatting(response_message)
     
-    # Step 7: Build response
+    # Step 7: Store cleaned agent response in session
+    store_message(current_session, 'agent', cleaned_response)
+    
+    # Step 8: Build response
     return {
         'session_id': current_session,
         'session_mode': session_mode,  # 'new' or 'continue'
@@ -1389,7 +1518,7 @@ Provide a helpful, professional response."""
         'activity_logged': activity_logged,
         'activity_id': activity_id,  # Only set if approval needed
         'agent_type': analysis_data.get('agent_type'),
-        'result': response_message,
+        'result': cleaned_response,  # Send cleaned response to frontend
         'agent_response': agent_response,
         'reasoning': analysis_data.get('reasoning')
     }
@@ -1456,11 +1585,13 @@ def process_with_agent():
         # Get case context from RAG if available
         case_context = ""
         try:
-            # Get some context from RAG
-            rag_results = rag_search(case_id, query, top_k=3)
+            # Get more context from RAG for better answers
+            rag_results = rag_search(case_id, query, top_k=10)
             if rag_results:
-                case_context = "\n".join([r['text_chunk'][:300] for r in rag_results])
-        except:
+                # Include full text chunks, not truncated
+                case_context = "\n\n---\n\n".join([f"Source: {r['source_url']}\n{r['text_chunk']}" for r in rag_results])
+        except Exception as rag_error:
+            print(f"RAG search error: {rag_error}")
             pass
         
         # Run orchestrator with session support

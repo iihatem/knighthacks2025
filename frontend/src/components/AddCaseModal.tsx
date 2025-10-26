@@ -409,15 +409,23 @@ const AddCaseModal: React.FC<AddCaseModalProps> = ({
           <div className="flex items-center justify-between p-6 border-t border-gray-200 bg-gray-50">
             <button
               onClick={currentStep === 1 ? handleClose : handleBack}
-              className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium"
+              disabled={isCreating}
+              className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {currentStep === 1 ? "Cancel" : "Back"}
             </button>
             <button
               onClick={currentStep === 2 ? handleSubmit : handleNext}
-              className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium transition-colors"
+              disabled={isCreating}
+              className="px-6 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {currentStep === 2 ? "Create Case" : "Next"}
+              {isCreating && (
+                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              {currentStep === 2 ? (isCreating ? "Creating..." : "Create Case") : "Next"}
             </button>
           </div>
         )}

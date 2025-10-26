@@ -90,18 +90,22 @@ def rag_search(case_id, query_text, top_k=5):
             # Step 3: Query using vector cosine similarity
             # Snowflake's VECTOR_COSINE_SIMILARITY returns a score between -1 and 1
             # Higher scores mean more similar
+            # Convert vector list to Snowflake ARRAY format
+            import json
+            vector_str = json.dumps(query_vector)
+            
             query = """
                 SELECT 
                     text_chunk,
                     source_url,
-                    VECTOR_COSINE_SIMILARITY(vector_embedding, %s) AS similarity_score
+                    VECTOR_COSINE_SIMILARITY(vector_embedding, PARSE_JSON(%s)) AS similarity_score
                 FROM case_data
                 WHERE case_id = %s
                 ORDER BY similarity_score DESC
                 LIMIT %s
             """
             
-            cursor.execute(query, (query_vector, case_id, top_k))
+            cursor.execute(query, (vector_str, case_id, top_k))
             results = cursor.fetchall()
             
             # Step 4: Format results
@@ -1399,7 +1403,8 @@ def process_with_agent():
     Request: {
         "case_id": "case-123",
         "query": "Research similar slip and fall cases",
-        "session_id": "sess-20251026-abc" (optional - to continue existing session)
+        "session_id": "sess-20251026-abc" (optional - to continue existing session),
+        "attachments": [] (optional - for evidence sorting)
     }
     
     Response: {
@@ -1420,9 +1425,33 @@ def process_with_agent():
         case_id = data.get('case_id')
         query = data.get('query')
         session_id = data.get('session_id')  # Optional - for continuing sessions
+        attachments = data.get('attachments', [])  # Optional - for evidence sorting
         
         if not case_id or not query:
             return jsonify({"status": "error", "message": "Missing case_id or query"}), 400
+        
+        # Check if attachments/files are present - trigger Evidence Sorter
+        if attachments and len(attachments) > 0:
+            from services.evidence_processor import process_evidence_from_email
+            
+            evidence_result = process_evidence_from_email(
+                case_id=case_id,
+                email_subject=f"Evidence upload: {query[:50]}",
+                email_body=query,
+                attachments=attachments,
+                sender_email="user@chatbot",
+                sender_name="User",
+                session_id=session_id
+            )
+            
+            # Return evidence processing result
+            return jsonify({
+                "status": "success",
+                "action_type": "process_evidence",
+                "agent_type": "EvidenceSorter",
+                "evidence_processed": True,
+                **evidence_result
+            }), 200
         
         # Get case context from RAG if available
         case_context = ""
@@ -1644,6 +1673,61 @@ def end_conversation(session_id):
             
     except Exception as e:
         app.logger.error(f"Error ending session: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/evidence/process-email', methods=['POST'])
+def process_email_evidence():
+    """
+    Process evidence from an email (manually submitted)
+    
+    Request body:
+    {
+        "case_id": "case-123",
+        "email_subject": "Evidence for case",
+        "email_body": "Email content here",
+        "sender_email": "witness@example.com",
+        "sender_name": "John Witness",
+        "attachments": [
+            {
+                "filename": "document.pdf",
+                "content_type": "application/pdf",
+                "data": "base64_encoded_data_here"
+            }
+        ]
+    }
+    """
+    try:
+        from services.evidence_processor import process_evidence_from_email
+        
+        data = request.json
+        
+        # Validate required fields
+        required_fields = ['case_id', 'email_subject', 'sender_email']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({
+                    "error": f"Missing required field: {field}"
+                }), 400
+        
+        # Process the evidence
+        result = process_evidence_from_email(
+            case_id=data['case_id'],
+            email_subject=data['email_subject'],
+            email_body=data.get('email_body', ''),
+            attachments=data.get('attachments', []),
+            sender_email=data['sender_email'],
+            sender_name=data.get('sender_name'),
+            session_id=data.get('session_id')
+        )
+        
+        if result['status'] == 'success':
+            return jsonify(result), 200
+        else:
+            return jsonify(result), 400
+            
+    except Exception as e:
+        app.logger.error(f"Error processing email evidence: {e}")
         return jsonify({"error": str(e)}), 500
 
 

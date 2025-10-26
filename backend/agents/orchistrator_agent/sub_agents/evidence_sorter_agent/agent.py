@@ -1,22 +1,188 @@
-from google.adk.agents import Agent
-from google.adk.tools import google_search
+"""
+Evidence Sorter Agent - Processes and categorizes evidence from emails and attachments
+"""
+import os
+import json
+import base64
+from datetime import datetime
+from typing import List, Dict, Any
 
-#can only use one built in tool at a time
 
-### add your own python function
-def get_current_weather(city: dict) -> dict:
-    """Get the current weather for a given city"""
-    return {
+def process_evidence(
+    case_id: str,
+    attachments: List[Dict],
+    email_subject: str = None,
+    email_body: str = None,
+    sender_email: str = None,
+    sender_name: str = None
+) -> Dict[str, Any]:
+    """
+    Process evidence from attachments and emails
+    
+    Args:
+        case_id: Case identifier
+        attachments: List of attachment dicts with filename, content_type, data (base64)
+        email_subject: Optional email subject
+        email_body: Optional email body
+        sender_email: Optional sender email
+        sender_name: Optional sender name
+    
+    Returns:
+        dict with processing results
+    """
+    try:
+        from services.evidence_processor import process_evidence_from_email
         
-        "weather": f"The weather in {city} is sunny"
+        result = process_evidence_from_email(
+            case_id=case_id,
+            email_subject=email_subject or "Evidence Upload",
+            email_body=email_body or "",
+            attachments=attachments,
+            sender_email=sender_email or "unknown@system",
+            sender_name=sender_name or "System"
+        )
+        
+        return result
+        
+    except Exception as e:
+        return {
+            'status': 'error',
+            'error': str(e),
+            'message': f'Failed to process evidence: {str(e)}'
+        }
 
-    }
 
-evidence_sorter_agent = Agent(
-    name="evidencee_sorter_agent",
-    model="gemini-2.5-flash",
-    description="extracts and labels attachments or media files from raw emails and gets them organized in the case management tool (Salesforce).",
-    instruction="""You are the Evidence Sorter Agent, responsible for extracting, analyzing, and organizing evidence from various sources including emails, attachments, and media files. You ensure all evidence is properly categorized and integrated into the case management system.
+def categorize_attachment(filename: str, content_type: str) -> str:
+    """
+    Categorize an attachment by its type
+    
+    Args:
+        filename: Name of the file
+        content_type: MIME type
+    
+    Returns:
+        Category name
+    """
+    # Image files
+    if content_type.startswith('image/'):
+        return 'Photo Evidence'
+    
+    # Video files
+    if content_type.startswith('video/'):
+        return 'Video Evidence'
+    
+    # Audio files
+    if content_type.startswith('audio/'):
+        return 'Audio Recording'
+    
+    # Documents
+    if content_type in ['application/pdf', 'application/x-pdf']:
+        return 'PDF Document'
+    
+    if content_type in [
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ]:
+        return 'Word Document'
+    
+    if content_type in [
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ]:
+        return 'Spreadsheet'
+    
+    # Text files
+    if content_type.startswith('text/'):
+        return 'Text Document'
+    
+    # Default
+    return 'General Attachment'
+
+
+def evidence_sorter_guru(
+    case_id: str,
+    query: str,
+    attachments: List[Dict] = None,
+    sender_info: Dict = None
+) -> Dict[str, Any]:
+    """
+    Main entry point for Evidence Sorter Agent
+    
+    Args:
+        case_id: Case identifier
+        query: User's message/request
+        attachments: Optional list of attachments to process
+        sender_info: Optional dict with sender_email and sender_name
+    
+    Returns:
+        dict with processing results and summary
+    """
+    
+    if not attachments or len(attachments) == 0:
+        return {
+            'status': 'error',
+            'message': 'No attachments provided for evidence sorting',
+            'evidence_processed': False
+        }
+    
+    sender_info = sender_info or {}
+    
+    # Process the evidence
+    result = process_evidence(
+        case_id=case_id,
+        attachments=attachments,
+        email_subject=f"Evidence: {query[:50]}",
+        email_body=query,
+        sender_email=sender_info.get('email', 'user@chatbot'),
+        sender_name=sender_info.get('name', 'User')
+    )
+    
+    if result.get('status') == 'success':
+        # Build a user-friendly response
+        evidence_items = result.get('evidence_items', [])
+        attachment_count = len([item for item in evidence_items if item.get('type') == 'attachment'])
+        
+        response_message = f"""✅ Evidence Processing Complete
+
+📦 Processed {result.get('total_items', 0)} items:
+- 1 email message
+- {attachment_count} attachment(s)
+
+Evidence has been categorized and logged to the case management system.
+Activity ID: {result.get('activity_id')}
+
+{result.get('summary', '')}
+"""
+        
+        return {
+            'status': 'success',
+            'evidence_processed': True,
+            'activity_id': result.get('activity_id'),
+            'total_items': result.get('total_items'),
+            'evidence_items': evidence_items,
+            'message': response_message,
+            'summary': result.get('summary')
+        }
+    else:
+        return {
+            'status': 'error',
+            'evidence_processed': False,
+            'message': f"❌ Failed to process evidence: {result.get('error', 'Unknown error')}",
+            'error': result.get('error')
+        }
+
+
+# Legacy Google ADK agent configuration (not used in current implementation)
+# Keeping for backward compatibility
+try:
+    from google.adk.agents import Agent
+    from google.adk.tools import google_search
+    
+    evidence_sorter_agent = Agent(
+        name="evidence_sorter_agent",
+        model="gemini-2.5-flash",
+        description="Extracts and labels attachments or media files from raw emails and gets them organized in the case management tool (Salesforce).",
+        instruction="""You are the Evidence Sorter Agent, responsible for extracting, analyzing, and organizing evidence from various sources including emails, attachments, and media files. You ensure all evidence is properly categorized and integrated into the case management system.
 
 Your primary responsibilities include:
 
@@ -70,5 +236,8 @@ Your primary responsibilities include:
    - Maintain detailed logs of all evidence handling activities
 
 Remember: You are the guardian of case evidence. Your meticulous organization and attention to detail ensure that no important evidence is lost and that all materials are easily accessible for legal proceedings.""",
-    tools=[google_search],
-)
+        tools=[google_search],
+    )
+except ImportError:
+    # Google ADK not available, using direct implementation instead
+    evidence_sorter_agent = None

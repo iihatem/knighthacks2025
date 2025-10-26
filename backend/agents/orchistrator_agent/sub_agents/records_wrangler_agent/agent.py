@@ -1,95 +1,128 @@
-from google.adk.agents import Agent
-from google.adk.tools import google_search
+"""Records Wrangler Agent - Pulls missing records and requests them from providers"""
+import os
+import json
+import boto3
+from datetime import datetime
+from typing import List, Dict, Any
 
-#can only use one built in tool at a time
 
-### add your own python function
-def get_current_weather(city: dict) -> dict:
-    """Get the current weather for a given city"""
-    return {
+def search_case_records(case_id: str, query: str) -> List[Dict]:
+    """Search for records in the case using RAG"""
+    try:
+        import sys
+        sys.path.insert(0, '/Users/arjunbhatheja/Desktop/Aura_MM/knighthacks2025/backend')
+        from app import rag_search
         
-        "weather": f"The weather in {city} is sunny"
+        results = rag_search(case_id, query, top_k=5)
+        return results
+        
+    except Exception as e:
+        print(f"Error searching records: {e}")
+        return []
 
-    }
 
-records_wrangler_agent = Agent(
-    name="records_wrangler_agent",
-    model="gemini-2.5-flash",
-    description="pulls missing bills or records from client messages. It could even do outreach to medical providers and request records on behalf of the client when missing.",
-    instruction="""You are the Records Wrangler Agent, responsible for identifying, collecting, and organizing all necessary records and documentation for legal cases. You serve as the documentation specialist, ensuring that all required records are obtained and properly organized.
+def retrieve_file_from_storage(source_url: str) -> Dict:
+    """Retrieve actual file from Digital Ocean Spaces"""
+    try:
+        session = boto3.session.Session()
+        s3_client = session.client(
+            's3',
+            region_name=os.getenv("DO_SPACES_REGION"),
+            endpoint_url=f"https://{os.getenv('DO_SPACES_REGION')}.digitaloceanspaces.com",
+            aws_access_key_id=os.getenv("DO_SPACES_KEY"),
+            aws_secret_access_key=os.getenv("DO_SPACES_SECRET")
+        )
+        
+        bucket_name = os.getenv("DO_SPACES_BUCKET")
+        
+        response = s3_client.get_object(Bucket=bucket_name, Key=source_url)
+        file_data = response['Body'].read()
+        
+        return {
+            'status': 'success',
+            'filename': source_url.split('/')[-1],
+            'size': len(file_data),
+            'data': file_data,
+            'content_type': response.get('ContentType', 'application/octet-stream')
+        }
+        
+    except Exception as e:
+        print(f"Error retrieving file: {e}")
+        return {'status': 'error', 'error': str(e)}
 
-Your primary responsibilities include:
 
-1. RECORD IDENTIFICATION AND COLLECTION:
-   - Identify missing bills, medical records, and other essential documents from client communications
-   - Extract relevant records from client messages and attachments
-   - Determine what additional records are needed for case development
-   - Prioritize records based on case requirements and deadlines
-   - Maintain comprehensive lists of required and obtained records
+def draft_records_request_email(provider_name: str, client_name: str, case_id: str, record_type: str = "medical records") -> Dict[str, str]:
+    """Draft an email requesting records from a medical provider"""
+    
+    subject = f"Medical Records Request for {client_name}"
+    
+    body = f"""Dear {provider_name},
 
-2. CLIENT RECORD COORDINATION:
-   - Communicate with clients about missing or incomplete records
-   - Provide clear instructions on what records are needed
-   - Help clients understand the importance of specific documents
-   - Coordinate with clients to obtain signed release forms
-   - Follow up on record requests and ensure timely delivery
+I am writing to request complete {record_type} for our client, {client_name}.
 
-3. THIRD-PARTY OUTREACH:
-   - Contact medical providers, hospitals, and healthcare facilities to request records
-   - Reach out to insurance companies for policy information and claim details
-   - Contact employers for employment records and wage information
-   - Communicate with government agencies for official records
-   - Coordinate with financial institutions for banking and financial records
+We are representing {client_name} in a legal matter and require all medical documentation related to their treatment at your facility.
 
-4. RECORD REQUEST MANAGEMENT:
-   - Draft professional record request letters and forms
-   - Ensure all necessary authorizations and releases are included
-   - Track the status of all record requests
-   - Follow up on overdue or incomplete record requests
-   - Handle denials and appeals for record requests
+We would appreciate receiving these records within 30 days.
 
-5. DOCUMENTATION AND ORGANIZATION:
-   - Organize received records in logical, accessible formats
-   - Create detailed inventories of all obtained records
-   - Categorize records by type, date, and relevance to the case
-   - Ensure all records are properly labeled and indexed
-   - Maintain secure storage and access controls for sensitive records
+Thank you for your assistance.
 
-6. QUALITY CONTROL:
-   - Verify the completeness and accuracy of received records
-   - Identify gaps in record collection and follow up as needed
-   - Ensure all records are properly authenticated and certified when required
-   - Check for missing pages or incomplete documents
-   - Validate that records meet legal requirements and standards
+Best regards,
+Case Reference: {case_id}"""
 
-7. COMPLIANCE AND LEGAL REQUIREMENTS:
-   - Ensure all record requests comply with HIPAA and other privacy regulations
-   - Follow proper procedures for obtaining medical records
-   - Maintain appropriate authorizations and consent forms
-   - Handle sensitive information according to legal requirements
-   - Ensure all record handling meets ethical and legal standards
+    return {'subject': subject, 'body': body, 'to': provider_name, 'record_type': record_type}
 
-8. RELATIONSHIP MANAGEMENT:
-   - Build positive relationships with healthcare providers and record custodians
-   - Maintain professional communication with all third parties
-   - Handle difficult situations and resistance to record requests
-   - Escalate issues when records cannot be obtained through normal channels
-   - Provide excellent customer service to all parties involved
 
-9. REPORTING AND TRACKING:
-   - Generate regular reports on record collection status
-   - Track deadlines and ensure timely record acquisition
-   - Document all record request activities and outcomes
-   - Provide updates to legal staff on record collection progress
-   - Maintain detailed logs of all record-related communications
-
-10. PROBLEM SOLVING:
-    - Develop creative solutions for difficult record requests
-    - Find alternative sources for missing or unavailable records
-    - Handle situations where records have been lost or destroyed
-    - Work with legal staff to develop strategies for record collection
-    - Adapt to changing requirements and unexpected challenges
-
-Remember: You are the documentation specialist who ensures that no critical record is left behind. Your persistence and professionalism ensure that every case has the complete documentation needed for success.""",
-    tools=[google_search],
-)
+def records_wrangler_guru(case_id: str, query: str, action_type: str = 'search_records') -> Dict[str, Any]:
+    """Main entry point for Records Wrangler Agent"""
+    
+    if action_type == 'search_records':
+        results = search_case_records(case_id, query)
+        
+        if not results or len(results) == 0:
+            return {
+                'status': 'success',
+                'action': 'search_records',
+                'found': False,
+                'results': [],
+                'message': f"No records found matching: '{query}'"
+            }
+        
+        response_parts = [f"Found {len(results)} record(s):\n"]
+        
+        for i, record in enumerate(results, 1):
+            similarity = int(record.get('similarity_score', 0) * 100)
+            response_parts.append(f"{i}. {record.get('source_url', 'Unknown')} (Match: {similarity}%)")
+        
+        return {
+            'status': 'success',
+            'action': 'search_records',
+            'found': True,
+            'results': results,
+            'count': len(results),
+            'message': '\n'.join(response_parts)
+        }
+    
+    elif action_type == 'request_records':
+        provider_name = "Medical Provider"
+        
+        if "from " in query.lower():
+            parts = query.lower().split("from ")
+            if len(parts) > 1:
+                provider_name = parts[1].strip().title()
+        
+        email_draft = draft_records_request_email(provider_name, "Client", case_id)
+        
+        return {
+            'status': 'success',
+            'action': 'request_records',
+            'requires_approval': True,
+            'draft': email_draft,
+            'message': f"Records request email drafted for {provider_name}"
+        }
+    
+    else:
+        return {
+            'status': 'error',
+            'error': f"Unknown action type: {action_type}",
+            'message': "Use 'search_records' or 'request_records'"
+        }

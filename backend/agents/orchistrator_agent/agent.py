@@ -3,6 +3,8 @@ import os
 import json
 import google.generativeai as genai
 from agents.orchistrator_agent.sub_agents.client_communication_agent.agent import client_communication_guru
+from agents.orchistrator_agent.sub_agents.evidence_sorter_agent.agent import evidence_sorter_guru
+from agents.orchistrator_agent.sub_agents.records_wrangler_agent.agent import records_wrangler_guru
 from tools.salesforce_tools import salesforce_create_task, salesforce_update_case
 from services.activity_logger import log_agent_activity
 from services.session_manager import (
@@ -66,14 +68,17 @@ Action types:
 - research_external: Web search, case law databases (NO APPROVAL)  
 - draft_email: Draft email to client/opposing counsel (REQUIRES APPROVAL)
 - schedule_appointment: Schedule deposition/mediation (REQUIRES APPROVAL)
+- process_evidence: Process email attachments and categorize evidence (NO APPROVAL)
+- search_records: Search for existing case records in storage (NO APPROVAL)
+- request_records: Draft email to request missing records from providers (REQUIRES APPROVAL)
 - general_query: General question, analysis (NO APPROVAL)
 
 Respond in JSON format:
 {{
   "is_continuation": true or false,
   "topic": "Brief description of topic",
-  "action_type": "research_internal|research_external|draft_email|schedule_appointment|general_query",
-  "agent_type": "LegalResearcher|ClientCommunicationGuru|VoiceBotScheduler|Orchestrator",
+  "action_type": "research_internal|research_external|draft_email|schedule_appointment|process_evidence|search_records|request_records|general_query",
+  "agent_type": "LegalResearcher|ClientCommunicationGuru|VoiceBotScheduler|EvidenceSorter|RecordsWrangler|Orchestrator",
   "requires_approval": true or false,
   "reasoning": "Why you made this determination"
 }}
@@ -156,6 +161,57 @@ Respond in JSON format:
             response_message = f"✅ Email sent to {agent_response.get('to_name')} ({agent_response.get('to')})\n\n{agent_response.get('draft', 'Email drafted')}"
         else:
             response_message = f"⚠️ Email drafted but not sent: {agent_response.get('send_message', 'Unknown error')}\n\n{agent_response.get('draft', 'Email drafted')}"
+    
+    elif action_type == 'process_evidence':
+        # Route to Evidence Sorter - processes email attachments
+        # Extract attachments from query context (would come from frontend)
+        agent_response = evidence_sorter_guru(
+            case_id=case_id,
+            query=query,
+            attachments=[]  # Attachments should come from frontend
+        )
+        
+        # Activity is already logged by evidence_processor
+        activity_id = agent_response.get('activity_id')
+        response_message = agent_response.get('message', 'Evidence processed successfully')
+    
+    elif action_type == 'search_records':
+        # Route to Records Wrangler - search for existing records
+        agent_response = records_wrangler_guru(
+            case_id=case_id,
+            query=query,
+            action_type='search_records'
+        )
+        
+        # NO activity log - search doesn't require approval
+        response_message = agent_response.get('message', 'Records search completed')
+    
+    elif action_type == 'request_records':
+        # Route to Records Wrangler - draft request email to provider
+        agent_response = records_wrangler_guru(
+            case_id=case_id,
+            query=query,
+            action_type='request_records'
+        )
+        
+        # REQUIRES APPROVAL - Log activity
+        if agent_response.get('draft'):
+            activity_id = log_agent_activity(
+                case_id=case_id,
+                agent_type='RecordsWrangler',
+                agent_action='request_records',
+                prompt=query,
+                agent_response=json.dumps(agent_response.get('draft')),
+                action_data={
+                    'draft': agent_response.get('draft'),
+                    'to': agent_response.get('draft', {}).get('to', 'Unknown provider'),
+                    'subject': agent_response.get('draft', {}).get('subject', 'Records Request')
+                },
+                requires_approval=True,
+                session_id=current_session
+            )
+        
+        response_message = agent_response.get('message', 'Records request email drafted')
         
     elif action_type == 'schedule_appointment':
         # Placeholder for VoiceBotScheduler (to be implemented)

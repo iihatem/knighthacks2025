@@ -1,95 +1,214 @@
-from google.adk.agents import Agent
-from google.adk.tools import google_search
+"""
+Legal Research Agent using Gemini 2.5 Pro with Google Search Grounding
 
-#can only use one built in tool at a time
+This agent finds supporting verdicts, citations, and novel legal theories
+to strengthen cases. Uses Gemini's built-in web search for automatic
+citation and source attribution.
+"""
 
-### add your own python function
-def get_current_weather(city: dict) -> dict:
-    """Get the current weather for a given city"""
-    return {
+import os
+import json
+from google import genai
+from datetime import datetime
+
+
+def legal_researcher(case_id, query, case_context):
+    """
+    Legal research agent using Gemini 2.5 Pro + Google Search Grounding
+    
+    Capabilities:
+    1. Find similar verdicts/precedents with citations
+    2. Identify novel legal theories
+    3. Provide verifiable sources automatically
+    4. Summarize case law
+    5. Suggest counter-arguments
+    
+    Args:
+        case_id: Case identifier
+        query: Research question from lawyer
+        case_context: Case background/details
+    
+    Returns:
+        {
+            "summary": "Key findings...",
+            "supporting_cases": [...],  # With citations
+            "novel_theories": [...],
+            "counter_arguments": [...],
+            "sources": [...],  # Actual web sources used
+            "web_search_queries": [...],  # What Gemini searched for
+            "strength_rating": 7,  # 1-10
+            "requires_approval": False
+        }
+    """
+    
+    try:
+        # Step 1: Initialize Gemini client
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         
-        "weather": f"The weather in {city} is sunny"
+        # Step 2: Build research prompt
+        research_prompt = f"""
+You are an expert legal researcher assisting a lawyer. Conduct comprehensive legal research on this query.
 
-    }
+**Research Request:** {query}
 
-legal_researcher_agent = Agent(
-    name="legal_researcher_agent",
-    model="gemini-2.5-flash",
-    description="dfinds supporting verdicts or citations to strengthen a case. Looks for novel theories to explore and preps the lawyer with an arsenal of good ideas.",
-    instruction="""You are the Legal Researcher Agent, responsible for conducting comprehensive legal research to strengthen cases, identify supporting precedents, and develop novel legal theories. You serve as the research arm of the legal team, providing lawyers with a powerful arsenal of legal arguments and strategies.
+**Case Context:** {case_context}
 
-Your primary responsibilities include:
+**Your Task:**
+1. Search for relevant case law, statutes, and legal precedents
+2. Find supporting verdicts that strengthen this case
+3. Identify 2-3 novel legal theories to explore
+4. Analyze potential counter-arguments from opposing counsel
+5. Rate the case strength (1-10) with reasoning
 
-1. PRECEDENT RESEARCH:
-   - Find supporting verdicts and case law that strengthen the client's position
-   - Identify relevant statutes, regulations, and legal authorities
-   - Research recent developments in applicable areas of law
-   - Locate favorable court decisions from similar jurisdictions
-   - Analyze trends in judicial decisions and legal interpretations
+**Required Output Format (JSON):**
+{{
+    "summary": "3-5 sentence overview of findings",
+    "supporting_cases": [
+        {{
+            "case_name": "Smith v. Jones (2023)",
+            "citation": "123 F.3d 456 (9th Cir. 2023)",
+            "relevance": "Why this case matters",
+            "key_holding": "Main legal principle",
+            "similarity_score": 8
+        }}
+    ],
+    "novel_theories": [
+        {{
+            "theory": "Theory name",
+            "description": "How to apply this",
+            "precedent_support": "Cases that support this approach",
+            "risk_level": "low/medium/high"
+        }}
+    ],
+    "counter_arguments": [
+        "Opposing counsel might argue X...",
+        "Defense could cite Y..."
+    ],
+    "strength_rating": 7,
+    "strength_reasoning": "Why this rating",
+    "recommended_next_steps": [
+        "Action 1",
+        "Action 2"
+    ]
+}}
 
-2. CASE STRENGTHENING:
-   - Identify legal arguments that support the client's case
-   - Find cases with similar facts that resulted in favorable outcomes
-   - Research legal theories that could be applied to strengthen arguments
-   - Identify potential weaknesses in opposing arguments
-   - Suggest strategies for addressing legal challenges
-
-3. NOVEL THEORY DEVELOPMENT:
-   - Explore innovative legal theories and approaches
-   - Research emerging areas of law that could be relevant
-   - Identify creative legal arguments and strategies
-   - Explore interdisciplinary approaches (e.g., technology law, medical law)
-   - Develop unique angles for complex legal issues
-
-4. COMPREHENSIVE LEGAL ANALYSIS:
-   - Analyze the legal landscape for each case
-   - Identify key legal issues and potential arguments
-   - Research procedural requirements and deadlines
-   - Analyze jurisdictional differences and their implications
-   - Evaluate the strength of different legal positions
-
-5. STRATEGIC RESEARCH:
-   - Research opposing counsel's track record and strategies
-   - Identify potential expert witnesses and their qualifications
-   - Research industry standards and best practices
-   - Analyze settlement patterns in similar cases
-   - Identify potential leverage points in negotiations
-
-6. LEGAL WRITING SUPPORT:
-   - Provide citations and legal authorities for briefs and motions
-   - Research supporting evidence for legal arguments
-   - Identify relevant legal standards and tests
-   - Find cases that support specific legal propositions
-   - Provide historical context for legal developments
-
-7. CONTINUOUS MONITORING:
-   - Track changes in relevant laws and regulations
-   - Monitor new court decisions that could impact cases
-   - Stay updated on legal developments in practice areas
-   - Identify emerging legal trends and their implications
-   - Track legislative changes that could affect cases
-
-8. KNOWLEDGE MANAGEMENT:
-   - Organize research findings in accessible formats
-   - Create research summaries and legal briefs
-   - Maintain databases of relevant legal authorities
-   - Develop research templates for common legal issues
-   - Share insights and findings with legal team members
-
-9. QUALITY ASSURANCE:
-   - Verify the accuracy and currency of all legal citations
-   - Ensure research is comprehensive and thorough
-   - Check for conflicting authorities and address discrepancies
-   - Validate legal arguments against current law
-   - Maintain high standards for legal research quality
-
-10. INNOVATION AND CREATIVITY:
-    - Think outside traditional legal frameworks
-    - Explore interdisciplinary legal approaches
-    - Identify opportunities for legal innovation
-    - Develop creative solutions to complex legal problems
-    - Challenge conventional legal wisdom when appropriate
-
-Remember: You are the legal team's research powerhouse. Your thorough research and creative thinking provide the foundation for winning legal strategies and innovative approaches to complex legal challenges.""",
-    tools=[google_search],
-)
+**Important:** Base your research on actual legal sources. Cite real cases, statutes, and legal principles.
+"""
+        
+        # Step 3: Call Gemini 2.5 Pro with Google Search Grounding enabled
+        response = client.models.generate_content(
+            model='gemini-2.5-pro',
+            contents=research_prompt,
+            config={
+                "tools": [{"google_search": {}}],  # Enable Google Search grounding
+                "temperature": 0.3,  # Lower for factual accuracy
+                "top_p": 0.8,
+                "max_output_tokens": 8192
+            }
+        )
+        
+        # Step 4: Extract research findings
+        research_text = response.text
+        
+        # Try to parse JSON response
+        try:
+            # Find JSON in response (might be wrapped in markdown)
+            if "```json" in research_text:
+                json_start = research_text.find("```json") + 7
+                json_end = research_text.find("```", json_start)
+                research_json = json.loads(research_text[json_start:json_end])
+            elif research_text.strip().startswith('{'):
+                research_json = json.loads(research_text)
+            else:
+                # If no JSON, create structured response from text
+                research_json = {
+                    "summary": research_text[:500],
+                    "supporting_cases": [],
+                    "novel_theories": [],
+                    "counter_arguments": [],
+                    "strength_rating": 5,
+                    "strength_reasoning": "Unable to parse detailed analysis",
+                    "recommended_next_steps": []
+                }
+        except json.JSONDecodeError:
+            # Fallback if JSON parsing fails
+            research_json = {
+                "summary": research_text,
+                "supporting_cases": [],
+                "novel_theories": [],
+                "counter_arguments": [],
+                "strength_rating": 5,
+                "strength_reasoning": "Analysis provided in summary",
+                "recommended_next_steps": []
+            }
+        
+        # Step 5: Extract grounding metadata (sources!)
+        grounding_metadata = {}
+        web_search_queries = []
+        sources = []
+        
+        if hasattr(response, 'candidates') and response.candidates:
+            candidate = response.candidates[0]
+            
+            # Extract grounding metadata
+            if hasattr(candidate, 'grounding_metadata'):
+                metadata = candidate.grounding_metadata
+                
+                # Get search queries used
+                if hasattr(metadata, 'web_search_queries'):
+                    web_search_queries = metadata.web_search_queries or []
+                
+                # Get grounding chunks (actual sources)
+                if hasattr(metadata, 'grounding_chunks'):
+                    for chunk in (metadata.grounding_chunks or []):
+                        if hasattr(chunk, 'web'):
+                            sources.append({
+                                'url': chunk.web.uri,
+                                'title': chunk.web.title if hasattr(chunk.web, 'title') else 'Unknown'
+                            })
+                
+                # Get grounding supports (which parts of response are supported by which sources)
+                if hasattr(metadata, 'grounding_supports'):
+                    grounding_metadata['supports'] = len(metadata.grounding_supports or [])
+        
+        # Step 6: Return comprehensive research result
+        return {
+            "query": query,
+            "case_id": case_id,
+            "summary": research_json.get('summary', 'No summary available'),
+            "supporting_cases": research_json.get('supporting_cases', []),
+            "novel_theories": research_json.get('novel_theories', []),
+            "counter_arguments": research_json.get('counter_arguments', []),
+            "strength_rating": research_json.get('strength_rating', 5),
+            "strength_reasoning": research_json.get('strength_reasoning', ''),
+            "recommended_next_steps": research_json.get('recommended_next_steps', []),
+            
+            # Grounding sources (THE KEY FEATURE!)
+            "sources": sources,  # Actual web sources Gemini used
+            "web_search_queries": web_search_queries,  # What Gemini searched for
+            "source_count": len(sources),
+            "grounded": len(sources) > 0,  # True if response is backed by sources
+            
+            # Metadata
+            "timestamp": datetime.now().isoformat(),
+            "saveable": True,  # Flag for "add to evidence sorter"
+            "requires_approval": False,  # Research doesn't need approval
+            "research_type": "legal_research"
+        }
+        
+    except Exception as e:
+        print(f"Error in legal_researcher: {e}")
+        return {
+            "query": query,
+            "case_id": case_id,
+            "summary": f"Research failed: {str(e)}",
+            "supporting_cases": [],
+            "novel_theories": [],
+            "counter_arguments": [],
+            "sources": [],
+            "web_search_queries": [],
+            "strength_rating": 0,
+            "error": str(e),
+            "requires_approval": False,
+            "saveable": False
+        }

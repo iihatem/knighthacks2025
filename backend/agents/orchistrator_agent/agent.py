@@ -120,26 +120,42 @@ Respond in JSON format:
     activity_id = None
     
     if action_type == 'draft_email':
-        # Route to Client Communication Guru
-        agent_response = client_communication_guru(case_context, query)
-        
-        # REQUIRES APPROVAL - Log activity immediately
-        activity_id = log_agent_activity(
+        # Route to Client Communication Guru with case_id and session_id
+        # send_email=True will actually send the email via SMTP after logging
+        agent_response = client_communication_guru(
+            case_context=case_context, 
+            task=query, 
             case_id=case_id,
-            agent_type='ClientCommunicationGuru',
-            agent_action='draft_email',
-            prompt=query,
-            agent_response=json.dumps(agent_response),
-            action_data={
-                'draft': agent_response.get('draft', ''),
-                'to': agent_response.get('to', 'Unknown client'),
-                'subject': agent_response.get('subject', 'Case Update')
-            },
-            requires_approval=True,
-            session_id=current_session
+            session_id=current_session,
+            send_email=True  # Actually send the email to client
         )
         
-        response_message = agent_response.get('draft', 'Email drafted')
+        # Activity is already logged by email_sender if email was sent
+        # If email was not sent (just drafted), log it here
+        if not agent_response.get('email_sent', False):
+            activity_id = log_agent_activity(
+                case_id=case_id,
+                agent_type='ClientCommunicationGuru',
+                agent_action='draft_email',
+                prompt=query,
+                agent_response=json.dumps(agent_response),
+                action_data={
+                    'draft': agent_response.get('draft', ''),
+                    'to': agent_response.get('to', 'Unknown client'),
+                    'subject': agent_response.get('subject', 'Case Update')
+                },
+                requires_approval=True,
+                session_id=current_session
+            )
+        else:
+            # Email was sent - activity_id comes from email_sender
+            activity_id = agent_response.get('activity_id')
+        
+        # Prepare response message
+        if agent_response.get('email_sent'):
+            response_message = f"✅ Email sent to {agent_response.get('to_name')} ({agent_response.get('to')})\n\n{agent_response.get('draft', 'Email drafted')}"
+        else:
+            response_message = f"⚠️ Email drafted but not sent: {agent_response.get('send_message', 'Unknown error')}\n\n{agent_response.get('draft', 'Email drafted')}"
         
     elif action_type == 'schedule_appointment':
         # Placeholder for VoiceBotScheduler (to be implemented)
@@ -162,18 +178,26 @@ Respond in JSON format:
         
         response_message = "Appointment scheduling requires approval (agent not yet implemented)"
         
-    elif action_type in ['research_internal', 'research_external']:
-        # Research - NO APPROVAL NEEDED
-        # For now, return a helpful message
+    elif action_type == 'research_external':
+        # Legal Research with web search - NO APPROVAL NEEDED
+        from agents.orchistrator_agent.sub_agents.legal_researcher_agent.agent import legal_researcher
+        
+        agent_response = legal_researcher(case_id, query, case_context)
+        
+        # NO activity log - research doesn't require approval, just stored in session
+        response_message = agent_response.get('summary', 'Legal research completed')
+        
+    elif action_type == 'research_internal':
+        # Internal RAG search - NO APPROVAL NEEDED
         agent_response = {
             'action_type': action_type,
-            'message': f'Conducting {action_type.replace("_", " ")}...',
-            'note': 'Research agents process queries without approval',
+            'message': f'Conducting internal case file search...',
+            'note': 'RAG search processes queries without approval',
             'query': query
         }
         
         # NO activity log - just store in session
-        response_message = f"Researching: {query}"
+        response_message = f"Searching case files: {query}"
         
     else:
         # General query - NO APPROVAL NEEDED

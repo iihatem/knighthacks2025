@@ -37,7 +37,7 @@ export default function Home() {
     <Dashboard>
       <div className="space-y-6">
         {/* User Welcome Section */}
-        <div className="flex items-center space-x-4 py-6">
+        <div className="flex items-center space-x-4 py-2">
           {/* User Profile Picture */}
           <div className="w-32 h-32 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center">
             <span className="text-white text-4xl font-semibold">JD</span>
@@ -53,7 +53,7 @@ export default function Home() {
         </div>
 
         {/* Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-96">
           {/* Recent Cases */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-4">

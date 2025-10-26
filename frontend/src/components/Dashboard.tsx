@@ -168,20 +168,21 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
 
   return (
     <div
-      className="min-h-screen"
+      className="h-screen flex flex-col overflow-hidden"
       style={{ backgroundColor: "var(--color-bg-primary)" }}
     >
-      {/* Sidebar */}
-      <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out flex flex-col ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <div
-          className="flex items-center justify-between h-16 px-4 border-b"
-          style={{ borderColor: "var(--color-gray-light)" }}
+      {/* Main content */}
+      <div className="flex flex-col h-full">
+        {/* Header */}
+        <header
+          className="bg-white shadow-sm border-b flex-shrink-0"
+          style={{
+            backgroundColor: "var(--color-bg-card)",
+            borderColor: "var(--color-gray-light)",
+          }}
         >
-          <div className="flex items-center">
+          <div className="flex items-center justify-between h-16 px-6">
+            {/* Logo */}
             <div className="w-18 h-18 flex items-center justify-center">
               <img
                 src="/briefly_logo.svg"
@@ -189,291 +190,101 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
                 className="w-full h-full"
               />
             </div>
-          </div>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-          >
-            <XMarkIcon className="h-5 w-5" />
-          </button>
-        </div>
 
-        <div className="flex flex-col flex-1">
-          <nav className="mt-5 px-2 flex-1">
-            <div className="space-y-2">
-              {navigationItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`${
-                      item.current ? "border-r-2" : "hover:bg-gray-50"
-                    } group flex items-center px-4 py-4 text-base font-medium rounded-lg transition-all duration-200`}
-                    style={{
-                      backgroundColor: item.current
-                        ? "rgba(255, 87, 51, 0.1)"
-                        : "transparent",
-                      color: item.current
-                        ? "var(--color-accent-orange)"
-                        : "var(--color-text-secondary)",
-                      borderColor: item.current
-                        ? "var(--color-accent-orange)"
-                        : "transparent",
-                    }}
-                  >
-                    <Icon
-                      className="mr-4 h-6 w-6"
-                      style={{
-                        color: item.current
-                          ? "var(--color-accent-orange)"
-                          : "var(--color-gray-medium)",
-                      }}
-                    />
-                    {item.name}
-                  </Link>
-                );
-              })}
-            </div>
-          </nav>
-
-          {/* Settings Button at Bottom */}
-          <div className="px-2 pb-4">
-            <Link
-              href="/settings"
-              className={`${
-                pathname === "/settings" ? "border-r-2" : "hover:bg-gray-50"
-              } group flex items-center px-4 py-4 text-base font-medium rounded-lg transition-all duration-200`}
-              style={{
-                backgroundColor:
-                  pathname === "/settings"
-                    ? "rgba(255, 87, 51, 0.1)"
-                    : "transparent",
-                color:
-                  pathname === "/settings"
-                    ? "var(--color-accent-orange)"
-                    : "var(--color-text-secondary)",
-                borderColor:
-                  pathname === "/settings"
-                    ? "var(--color-accent-orange)"
-                    : "transparent",
-              }}
-            >
-              <CogIcon
-                className="mr-4 h-6 w-6"
+            {/* Navigation Menu - Centered */}
+            <nav className="absolute left-1/2 transform -translate-x-1/2 flex space-x-8">
+              <Link
+                href="/"
+                className="font-medium pb-1"
                 style={{
                   color:
-                    pathname === "/settings"
-                      ? "var(--color-accent-orange)"
-                      : "var(--color-gray-medium)",
+                    pathname === "/"
+                      ? "var(--color-text-primary)"
+                      : "var(--color-text-secondary)",
+                  borderBottom:
+                    pathname === "/"
+                      ? "2px solid var(--color-accent-orange)"
+                      : "none",
                 }}
-              />
-              Settings
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div
-        className={`transition-all duration-300 ease-in-out ${
-          sidebarOpen ? "ml-64" : "ml-0"
-        }`}
-      >
-        {/* Header */}
-        <header
-          className="bg-white shadow-sm border-b"
-          style={{
-            backgroundColor: "var(--color-bg-card)",
-            borderColor: "var(--color-gray-light)",
-          }}
-        >
-          <div className="flex items-center justify-between h-16 px-6">
-            <div className="flex items-center space-x-8">
-              {!sidebarOpen && (
-                <button
-                  onClick={() => setSidebarOpen(true)}
-                  className="p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                >
-                  <svg
-                    className="h-6 w-6"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 6h16M4 12h16M4 18h16"
-                    />
-                  </svg>
-                </button>
-              )}
-
-              {/* Navigation Menu */}
-              <nav className="hidden md:flex space-x-8">
-                <Link
-                  href="/"
-                  className="font-medium pb-1"
-                  style={{
-                    color:
-                      pathname === "/"
-                        ? "var(--color-text-primary)"
-                        : "var(--color-text-secondary)",
-                    borderBottom:
-                      pathname === "/"
-                        ? "2px solid var(--color-accent-orange)"
-                        : "none",
-                  }}
-                >
-                  Home
-                </Link>
-                <Link
-                  href="/cases"
-                  className="font-medium pb-1"
-                  style={{
-                    color:
-                      pathname === "/cases"
-                        ? "var(--color-text-primary)"
-                        : "var(--color-text-secondary)",
-                    borderBottom:
-                      pathname === "/cases"
-                        ? "2px solid var(--color-accent-orange)"
-                        : "none",
-                  }}
-                >
-                  Cases
-                </Link>
-                <Link
-                  href="/clients"
-                  className="font-medium pb-1"
-                  style={{
-                    color:
-                      pathname === "/clients"
-                        ? "var(--color-text-primary)"
-                        : "var(--color-text-secondary)",
-                    borderBottom:
-                      pathname === "/clients"
-                        ? "2px solid var(--color-accent-orange)"
-                        : "none",
-                  }}
-                >
-                  Clients
-                </Link>
-                <Link
-                  href="/calendar"
-                  className="font-medium pb-1"
-                  style={{
-                    color:
-                      pathname === "/calendar"
-                        ? "var(--color-text-primary)"
-                        : "var(--color-text-secondary)",
-                    borderBottom:
-                      pathname === "/calendar"
-                        ? "2px solid var(--color-accent-orange)"
-                        : "none",
-                  }}
-                >
-                  Calendar
-                </Link>
-                <Link
-                  href="/analytics"
-                  className="font-medium pb-1"
-                  style={{
-                    color:
-                      pathname === "/analytics"
-                        ? "var(--color-text-primary)"
-                        : "var(--color-text-secondary)",
-                    borderBottom:
-                      pathname === "/analytics"
-                        ? "2px solid var(--color-accent-orange)"
-                        : "none",
-                  }}
-                >
-                  Analytics
-                </Link>
-              </nav>
-            </div>
-
-            {/* Search Bar */}
-            <div className="flex-1 max-w-md mx-8">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Enter your search request..."
-                  className="w-full px-4 py-2 rounded-full pl-10 pr-4 focus:outline-none"
-                  style={{
-                    backgroundColor: "var(--color-gray-light)",
-                    color: "var(--color-text-primary)",
-                  }}
-                />
-                <svg
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  style={{ color: "var(--color-gray-medium)" }}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                  />
-                </svg>
-              </div>
-            </div>
+              >
+                Home
+              </Link>
+              <Link
+                href="/cases"
+                className="font-medium pb-1"
+                style={{
+                  color:
+                    pathname === "/cases"
+                      ? "var(--color-text-primary)"
+                      : "var(--color-text-secondary)",
+                  borderBottom:
+                    pathname === "/cases"
+                      ? "2px solid var(--color-accent-orange)"
+                      : "none",
+                }}
+              >
+                Cases
+              </Link>
+              <Link
+                href="/clients"
+                className="font-medium pb-1"
+                style={{
+                  color:
+                    pathname === "/clients"
+                      ? "var(--color-text-primary)"
+                      : "var(--color-text-secondary)",
+                  borderBottom:
+                    pathname === "/clients"
+                      ? "2px solid var(--color-accent-orange)"
+                      : "none",
+                }}
+              >
+                Clients
+              </Link>
+            </nav>
 
             <div className="flex items-center space-x-4">
               <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full">
-                <svg
-                  className="h-5 w-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-                  />
-                </svg>
-              </button>
-              <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full">
                 <BellIcon className="h-5 w-5" />
               </button>
-              <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full">
-                <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                  <UserCircleIcon className="h-6 w-6" />
-                </div>
-              </button>
+              <Link href="/settings">
+                <button className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full">
+                  <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
+                    <UserCircleIcon className="h-6 w-6" />
+                  </div>
+                </button>
+              </Link>
             </div>
           </div>
         </header>
 
         {/* Main content area */}
-        <main className="flex-1 p-6">{children}</main>
+        <main className="flex-1 p-6 overflow-hidden">{children}</main>
 
-        {/* Floating Chat - Minimized Button */}
+        {/* Floating Chat - Minimized Button (Futuristic) */}
         {isChatMinimized && (
-          <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-40">
+          <div className="fixed bottom-8 right-8 z-40 animate-fadeIn">
             <button
               onClick={() => setIsChatMinimized(false)}
-              className="px-8 py-4 bg-orange-500 text-white rounded-full shadow-2xl hover:bg-orange-600 transition-all duration-200 flex items-center space-x-3 font-medium"
+              className="group px-8 py-4 text-white rounded-2xl shadow-2xl hover:shadow-3xl transition-all duration-300 flex items-center space-x-3 font-semibold transform hover:scale-105 border-2 border-orange-400/30"
+              style={{
+                background: "linear-gradient(135deg, #ff5733 0%, #ff8c00 100%)",
+              }}
             >
-              <ChatBubbleLeftRightIcon className="h-6 w-6" />
-              <span>
+              <div className="relative">
+                <ChatBubbleLeftRightIcon className="h-6 w-6" />
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
+              </div>
+              <span className="text-base">
                 {selectedCaseId
-                  ? `Chat about ${
+                  ? `💬 ${
                       cases.find((c) => c.case_id === selectedCaseId)
-                        ?.case_name || "case"
+                        ?.case_name || "Chat"
                     }`
-                  : "Open AI Assistant"}
+                  : "🤖 Open AI Assistant"}
               </span>
               {chatMessages.length > 0 && (
-                <span className="px-2 py-1 bg-white text-orange-600 rounded-full text-xs font-bold">
+                <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white rounded-full text-xs font-bold border border-white/30 group-hover:bg-white group-hover:text-orange-600 transition-all">
                   {chatMessages.length}
                 </span>
               )}
@@ -481,41 +292,65 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
           </div>
         )}
 
-        {/* Floating Chat - Expanded (Centered, Skinny, Wide with Round Edges + AI Functionality) */}
+        {/* Floating Chat - Expanded (Futuristic Design) */}
         {!isChatMinimized && (
-          <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-40 w-full max-w-4xl px-4">
+          <div className="fixed bottom-6 right-6 z-40 w-full max-w-2xl animate-fadeIn">
             <div
-              className="rounded-3xl shadow-2xl border p-6"
+              className="rounded-3xl shadow-2xl border backdrop-blur-xl overflow-hidden"
               style={{
-                backgroundColor: "var(--color-bg-card)",
-                borderColor: "var(--color-gray-light)",
+                background: "linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 250, 245, 0.95) 100%)",
+                borderColor: "rgba(255, 87, 51, 0.2)",
+                boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 87, 51, 0.1)",
               }}
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
               onDragEnter={(e) => e.preventDefault()}
             >
-              {/* Chat Header with Minimize Button */}
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <ChatBubbleLeftRightIcon className="h-5 w-5 text-orange-600" />
-                  <span className="text-sm font-medium text-gray-700">
-                    AI Legal Assistant
-                  </span>
+              {/* Chat Header with Gradient Background */}
+              <div 
+                className="flex items-center justify-between px-6 py-4 border-b"
+                style={{
+                  background: "linear-gradient(90deg, rgba(255, 87, 51, 0.08) 0%, rgba(255, 140, 0, 0.05) 100%)",
+                  borderColor: "rgba(255, 87, 51, 0.1)",
+                }}
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="relative">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg">
+                      <ChatBubbleLeftRightIcon className="h-5 w-5 text-white" />
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse"></div>
+                  </div>
+                  <div>
+                    <span className="text-sm font-bold bg-gradient-to-r from-orange-600 to-orange-500 bg-clip-text text-transparent">
+                      AI Legal Assistant
+                    </span>
+                    <p className="text-xs text-gray-500">Powered by Gemini AI</p>
+                  </div>
                 </div>
                 <button
                   onClick={() => setIsChatMinimized(true)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  className="p-2 hover:bg-white/50 rounded-xl transition-all duration-200 group"
                   title="Minimize chat"
                 >
-                  <MinusIcon className="h-5 w-5 text-gray-500" />
+                  <MinusIcon className="h-5 w-5 text-gray-400 group-hover:text-orange-600 transition-colors" />
                 </button>
               </div>
 
-              {/* Case Selector (shown when clicked or when no case selected) */}
+              {/* Case Selector with Modern Glassmorphism */}
               {(showCaseSelector || !selectedCaseId) && (
-                <div className="mb-4 p-3 bg-orange-50 rounded-2xl border border-orange-200">
-                  <label className="text-xs font-medium text-orange-800 block mb-2">
-                    Select a case to chat about:
+                <div 
+                  className="mx-6 mt-4 p-4 rounded-2xl border backdrop-blur-sm animate-fadeIn"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(255, 237, 213, 0.6) 0%, rgba(255, 248, 240, 0.8) 100%)",
+                    borderColor: "rgba(255, 87, 51, 0.3)",
+                  }}
+                >
+                  <label className="text-xs font-semibold text-orange-800 block mb-2 flex items-center">
+                    <svg className="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Select your case
                   </label>
                   <select
                     value={selectedCaseId || ""}
@@ -523,11 +358,11 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
                       setSelectedCaseId(e.target.value);
                       setShowCaseSelector(false);
                     }}
-                    className="w-full px-4 py-2 text-sm border border-orange-300 rounded-full focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    className="custom-select w-full px-4 py-3 text-sm border-2 border-orange-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white/80 backdrop-blur-sm font-medium transition-all"
                     disabled={casesLoading}
                   >
                     <option value="">
-                      {casesLoading ? "Loading cases..." : "Choose a case..."}
+                      {casesLoading ? "🔄 Loading cases..." : "📁 Choose a case..."}
                     </option>
                     {cases.map((caseItem) => (
                       <option key={caseItem.case_id} value={caseItem.case_id}>
@@ -538,9 +373,9 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
                 </div>
               )}
 
-              {/* Chat Messages (if any) */}
+              {/* Chat Messages with Enhanced Design */}
               {chatMessages.length > 0 && (
-                <div className="mb-4 max-h-48 overflow-y-auto space-y-2">
+                <div className="mx-6 my-4 max-h-64 overflow-y-auto space-y-3 scrollbar-thin scrollbar-thumb-orange-300 scrollbar-track-gray-100">
                   {chatMessages.map((message) => (
                     <div
                       key={message.id}
@@ -548,25 +383,25 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
                         message.role === "user"
                           ? "justify-end"
                           : "justify-start"
-                      }`}
+                      } animate-fadeIn`}
                     >
                       <div
-                        className={`max-w-md px-4 py-2 rounded-2xl text-sm ${
+                        className={`max-w-lg px-5 py-3 rounded-2xl text-sm shadow-md transition-all duration-200 hover:shadow-lg ${
                           message.role === "user"
-                            ? "bg-orange-500 text-white"
+                            ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white"
                             : message.role === "system"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-gray-100 text-gray-800"
+                            ? "bg-red-100 text-red-800 border border-red-200"
+                            : "bg-white text-gray-800 border border-gray-200"
                         }`}
                       >
-                        <p className="whitespace-pre-wrap break-words">
+                        <p className="whitespace-pre-wrap break-words leading-relaxed">
                           {message.content}
                         </p>
                         <span
-                          className={`block text-right text-xs mt-1 ${
+                          className={`block text-right text-xs mt-2 ${
                             message.role === "user"
                               ? "text-orange-100"
-                              : "text-gray-500"
+                              : "text-gray-400"
                           }`}
                         >
                           {message.timestamp.toLocaleTimeString([], {
@@ -578,21 +413,21 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
                     </div>
                   ))}
                   {isProcessing && (
-                    <div className="flex justify-start">
-                      <div className="max-w-md px-4 py-2 rounded-2xl bg-gray-100 text-gray-800">
-                        <div className="flex items-center space-x-2">
+                    <div className="flex justify-start animate-fadeIn">
+                      <div className="max-w-md px-5 py-3 rounded-2xl bg-gradient-to-r from-gray-50 to-gray-100 text-gray-800 border border-gray-200 shadow-md">
+                        <div className="flex items-center space-x-3">
                           <div className="flex space-x-1">
-                            <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                            <div className="w-2.5 h-2.5 bg-orange-500 rounded-full animate-bounce"></div>
                             <div
-                              className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                              className="w-2.5 h-2.5 bg-orange-500 rounded-full animate-bounce"
                               style={{ animationDelay: "0.1s" }}
                             ></div>
                             <div
-                              className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                              className="w-2.5 h-2.5 bg-orange-500 rounded-full animate-bounce"
                               style={{ animationDelay: "0.2s" }}
                             ></div>
                           </div>
-                          <span className="text-xs">AI is thinking...</span>
+                          <span className="text-xs font-medium text-gray-600">AI is analyzing your request...</span>
                         </div>
                       </div>
                     </div>
@@ -601,35 +436,30 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
                 </div>
               )}
 
-              {/* Attachments display */}
+              {/* Attachments Display - Futuristic Pills */}
               {attachments.length > 0 && (
-                <div className="mb-4">
+                <div className="mx-6 mb-4">
                   <div className="flex flex-wrap gap-2">
                     {attachments.map((file, index) => (
                       <div
                         key={index}
-                        className="flex items-center rounded-full px-3 py-1 text-xs border"
+                        className="group flex items-center rounded-full px-4 py-2 text-xs border-2 backdrop-blur-sm transition-all duration-200 hover:scale-105"
                         style={{
-                          backgroundColor: "rgba(255, 87, 51, 0.1)",
-                          borderColor: "var(--color-accent-orange)",
+                          background: "linear-gradient(135deg, rgba(255, 237, 213, 0.8) 0%, rgba(255, 248, 240, 0.9) 100%)",
+                          borderColor: "rgba(255, 87, 51, 0.4)",
                         }}
                       >
-                        <PaperClipIcon
-                          className="h-3 w-3 mr-2"
-                          style={{ color: "var(--color-accent-orange)" }}
-                        />
-                        <span
-                          className="truncate max-w-32"
-                          style={{ color: "var(--color-accent-orange)" }}
-                        >
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center mr-2">
+                          <PaperClipIcon className="h-3 w-3 text-white" />
+                        </div>
+                        <span className="truncate max-w-40 font-medium text-orange-800">
                           {file.name}
                         </span>
                         <button
                           onClick={() => removeAttachment(index)}
-                          className="ml-2"
-                          style={{ color: "var(--color-accent-orange)" }}
+                          className="ml-2 w-5 h-5 rounded-full bg-white/50 hover:bg-red-500 flex items-center justify-center transition-all duration-200 group-hover:scale-110"
                         >
-                          <XMarkIcon className="h-3 w-3" />
+                          <XMarkIcon className="h-3 w-3 text-orange-600 group-hover:text-white" />
                         </button>
                       </div>
                     ))}
@@ -637,9 +467,39 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
                 </div>
               )}
 
-              {/* Chat input */}
-              <div className="flex items-center space-x-4">
-                <div className="flex-1">
+              {/* Chat Input - Ultra Modern Design */}
+              <div className="px-6 pb-4">
+                <div 
+                  className="flex items-center space-x-3 p-2 rounded-2xl border-2 transition-all duration-300 bg-white/50 backdrop-blur-sm"
+                  style={{
+                    borderColor: chatInput.trim() ? "rgba(255, 87, 51, 0.5)" : "rgba(209, 213, 219, 0.5)",
+                    boxShadow: chatInput.trim() ? "0 0 0 3px rgba(255, 87, 51, 0.1)" : "none",
+                  }}
+                >
+                  {/* Case Icon */}
+                  {selectedCaseId && (
+                    <button
+                      onClick={() => setShowCaseSelector(!showCaseSelector)}
+                      className="p-3 rounded-xl transition-all duration-200 hover:bg-orange-50 group flex-shrink-0"
+                      title="Change case"
+                    >
+                      <svg
+                        className="h-5 w-5 text-gray-400 group-hover:text-orange-600 transition-colors"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                    </button>
+                  )}
+                  
+                  {/* Input Field */}
                   <input
                     type="text"
                     value={chatInput}
@@ -657,45 +517,23 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
                     }}
                     placeholder={
                       selectedCaseId
-                        ? "Ask me anything about your legal case..."
+                        ? "✨ Ask anything about your legal case..."
                         : "Select a case first..."
                     }
-                    className="w-full px-6 py-4 rounded-full border-0 focus:outline-none"
-                    style={{
-                      backgroundColor: "var(--color-gray-light)",
-                      color: "var(--color-text-primary)",
-                    }}
+                    className="flex-1 px-4 py-3 rounded-xl border-0 focus:outline-none bg-transparent text-gray-700 placeholder-gray-400 font-medium"
                     disabled={isProcessing}
                   />
-                </div>
-                <div className="flex items-center space-x-2">
-                  {selectedCaseId && (
-                    <button
-                      onClick={() => setShowCaseSelector(!showCaseSelector)}
-                      className="p-3 rounded-full transition-all duration-200 hover:bg-gray-200"
-                      style={{ color: "var(--color-gray-medium)" }}
-                      title="Change case"
-                    >
-                      <svg
-                        className="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                        />
-                      </svg>
-                    </button>
-                  )}
-                  <label
-                    className="cursor-pointer p-3 rounded-full transition-all duration-200 hover:bg-gray-200"
-                    style={{ color: "var(--color-gray-medium)" }}
-                  >
-                    <PaperClipIcon className="h-5 w-5" />
+                  
+                  {/* Attachment Button */}
+                  <label className="cursor-pointer p-3 rounded-xl transition-all duration-200 hover:bg-orange-50 group flex-shrink-0">
+                    <div className="relative">
+                      <PaperClipIcon className="h-5 w-5 text-gray-400 group-hover:text-orange-600 transition-colors" />
+                      {attachments.length > 0 && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 text-white text-xs rounded-full flex items-center justify-center font-bold">
+                          {attachments.length}
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="file"
                       multiple
@@ -703,42 +541,61 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
                       className="hidden"
                     />
                   </label>
+                  
+                  {/* Send Button */}
                   <button
                     onClick={handleSendMessage}
                     disabled={
                       isProcessing || !chatInput.trim() || !selectedCaseId
                     }
-                    className="px-6 py-4 text-white rounded-full transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
-                    style={{ backgroundColor: "var(--color-accent-orange)" }}
+                    className="px-6 py-3 text-white rounded-xl transition-all duration-200 font-semibold disabled:cursor-not-allowed flex items-center space-x-2 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:transform-none flex-shrink-0"
+                    style={{ 
+                      background: (isProcessing || !chatInput.trim() || !selectedCaseId)
+                        ? "#9ca3af"
+                        : "linear-gradient(135deg, #ff5733 0%, #ff8c00 100%)",
+                      opacity: (isProcessing || !chatInput.trim() || !selectedCaseId) ? 0.6 : 1
+                    }}
                   >
                     {isProcessing ? (
-                      <span>Sending...</span>
+                      <>
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-sm">Sending</span>
+                      </>
                     ) : (
                       <>
-                        <span>Send</span>
-                        <PaperAirplaneIcon className="h-5 w-5" />
+                        <span className="text-sm">Send</span>
+                        <PaperAirplaneIcon className="h-4 w-4" />
                       </>
                     )}
                   </button>
                 </div>
               </div>
 
-              {/* Hint text */}
-              <div
-                className="mt-3 text-xs text-center"
-                style={{ color: "var(--color-gray-medium)" }}
+              {/* Enhanced Status Bar */}
+              <div 
+                className="px-6 pb-4 pt-2 text-xs text-center border-t"
+                style={{ 
+                  borderColor: "rgba(255, 87, 51, 0.1)",
+                  background: "linear-gradient(to top, rgba(255, 250, 245, 0.5) 0%, transparent 100%)"
+                }}
               >
                 {selectedCaseId ? (
-                  <>
-                    Chatting about:{" "}
-                    <span className="font-medium text-orange-600">
+                  <div className="flex items-center justify-center space-x-2 text-gray-600">
+                    <div className="flex items-center space-x-1">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="font-medium">Active:</span>
+                    </div>
+                    <span className="font-bold bg-gradient-to-r from-orange-600 to-orange-500 bg-clip-text text-transparent">
                       {cases.find((c) => c.case_id === selectedCaseId)
                         ?.case_name || selectedCaseId}
-                    </span>{" "}
-                    • Drag and drop files here or click the attachment icon
-                  </>
+                    </span>
+                    <span className="text-gray-400">•</span>
+                    <span className="text-gray-500">Drag & drop files or click 📎</span>
+                  </div>
                 ) : (
-                  "Select a case above to start chatting with your AI assistant"
+                  <span className="text-gray-500">
+                    💡 Select a case above to unlock AI-powered legal assistance
+                  </span>
                 )}
               </div>
             </div>

@@ -28,3 +28,100 @@ body {
   font-weight: 400;
   line-height: 1.5;
 }
+
+/* Custom Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Custom Select Dropdown Styling - Remove ALL blue backgrounds */
+.custom-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.custom-select option {
+  background-color: white !important;
+  background: white !important;
+  color: #333 !important;
+  padding: 10px !important;
+}
+
+.custom-select option:checked,
+.custom-select option:focus,
+.custom-select option:active,
+.custom-select option[selected] {
+  background-color: #fed7aa !important;
+  background: #fed7aa !important;
+  background-image: none !important;
+  color: #c2410c !important;
+  font-weight: 600 !important;
+}
+
+.custom-select option:hover {
+  background-color: #fff7ed !important;
+  background: #fff7ed !important;
+  color: #ea580c !important;
+}
+
+/* Override any browser default blue */
+select option:checked {
+  background: linear-gradient(0deg, #fed7aa 0%, #fed7aa 100%) !important;
+  background-color: #fed7aa !important;
+  color: #c2410c !important;
+}
+
+select option:focus {
+  background: #fff7ed !important;
+  background-color: #fff7ed !important;
+}
+
+/* Force override on all browsers */
+select:focus option:checked {
+  background: #fed7aa !important;
+}
+
+select option::selection {
+  background: #fed7aa !important;
+}
+
+
+
+/* Custom Scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #fed7aa;
+  border-radius: 10px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #fb923c;
+}
+
+.scrollbar-track-gray-100::-webkit-scrollbar-track {
+  background: #f3f4f6;
+}
+
+.scrollbar-thumb-orange-300::-webkit-scrollbar-thumb {
+  background: #fdba74;
+}

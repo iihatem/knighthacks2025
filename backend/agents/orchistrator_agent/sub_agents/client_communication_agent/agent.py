@@ -5,6 +5,7 @@ from google.adk.tools import google_search
 
 ### add your own python function
 def get_current_weather(city: dict) -> dict:
+
     """Get the current weather for a given city"""
     return {
         
@@ -51,5 +52,6 @@ Your primary responsibilities include:
    - Maintain detailed records of all client communications
 
 Remember: You are the face of the firm to clients. Every message you draft should reflect professionalism, empathy, and legal expertise.""",
+
    tools=[get_current_weather],
 )

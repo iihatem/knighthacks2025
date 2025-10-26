@@ -160,6 +160,59 @@ def embed_text_snowflake(text):
         app.logger.error(f"Snowflake Embedding Error: {e}")
         return None
 
+def generate_case_number():
+    """
+    Generates a unique case number in format: MM-YYYY-NNNNN
+    MM = Morgan & Morgan
+    YYYY = Current year
+    NNNNN = Sequential number (padded to 5 digits)
+    
+    Returns:
+        str: Case number like "MM-2025-00001"
+    """
+    try:
+        from datetime import datetime
+        year = datetime.now().year
+        
+        conn = get_snowflake_conn()
+        if not conn:
+            # Fallback to UUID-based if DB connection fails
+            return f"MM-{year}-{str(uuid.uuid4())[:5].upper()}"
+        
+        cursor = conn.cursor()
+        try:
+            # Get the highest case number for this year
+            cursor.execute(
+                """
+                SELECT MAX(case_number) 
+                FROM case_data 
+                WHERE case_number LIKE %s
+                """,
+                (f"MM-{year}-%",)
+            )
+            result = cursor.fetchone()
+            
+            if result and result[0]:
+                # Extract the number part and increment
+                last_number = int(result[0].split('-')[-1])
+                new_number = last_number + 1
+            else:
+                # First case of the year
+                new_number = 1
+            
+            return f"MM-{year}-{new_number:05d}"
+            
+        finally:
+            cursor.close()
+            conn.close()
+            
+    except Exception as e:
+        app.logger.error(f"Error generating case number: {e}")
+        # Fallback to timestamp-based
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        return f"MM-{timestamp}"
+
 def get_image_description(image_bytes, context=""):
     """
     Gets a text description of an image using Gemini Vision.
@@ -208,10 +261,17 @@ Provide a detailed description that would help a lawyer understand the evidence.
         app.logger.error(traceback.format_exc())
         return "Could not analyze image."
 
-def store_in_snowflake(case_id, source_url, text_chunk, vector):
+def store_in_snowflake(case_id, source_url, text_chunk, vector, case_metadata=None):
     """
     Inserts the processed data into our Snowflake table.
     Now uses a provided connection instead of creating a new one.
+    
+    Args:
+        case_id: Unique case identifier
+        source_url: URL or filename of the source
+        text_chunk: Text content to store
+        vector: Vector embedding (768 dimensions)
+        case_metadata: Optional dict with case_name, case_number, client_name, client_phone, client_email
     """
     if vector is None:
         app.logger.warning(f"Skipping Snowflake insert for {source_url} due to missing vector.")
@@ -230,13 +290,34 @@ def store_in_snowflake(case_id, source_url, text_chunk, vector):
         # Snowflake expects array format like [val1, val2, val3]
         vector_str = '[' + ','.join(str(v) for v in vector) + ']'
         
-        cursor.execute(
-            f"""
-            INSERT INTO case_data (case_id, source_url, text_chunk, vector_embedding)
-            SELECT %s, %s, %s, {vector_str}::VECTOR(FLOAT, 768)
-            """,
-            (case_id, source_url, text_chunk)
-        )
+        # Build query with metadata if provided
+        if case_metadata:
+            cursor.execute(
+                f"""
+                INSERT INTO case_data (
+                    case_id, source_url, text_chunk, vector_embedding,
+                    case_name, case_number, client_name, client_phone, client_email
+                )
+                SELECT %s, %s, %s, {vector_str}::VECTOR(FLOAT, 768), %s, %s, %s, %s, %s
+                """,
+                (
+                    case_id, source_url, text_chunk,
+                    case_metadata.get('case_name'),
+                    case_metadata.get('case_number'),
+                    case_metadata.get('client_name'),
+                    case_metadata.get('client_phone'),
+                    case_metadata.get('client_email')
+                )
+            )
+        else:
+            cursor.execute(
+                f"""
+                INSERT INTO case_data (case_id, source_url, text_chunk, vector_embedding)
+                SELECT %s, %s, %s, {vector_str}::VECTOR(FLOAT, 768)
+                """,
+                (case_id, source_url, text_chunk)
+            )
+        
         conn.commit()  # ⭐ IMPORTANT: Commit the transaction!
         app.logger.info(f"✅ Successfully stored chunk for {case_id} in Snowflake.")
         return True
@@ -253,36 +334,101 @@ def store_in_snowflake(case_id, source_url, text_chunk, vector):
 
 @app.route('/api/create-case', methods=['POST'])
 def create_case():
+    """
+    Creates a new case with client metadata and optional files.
+    Supports two-step workflow:
+    - Step 1 & 2 together: Submit metadata + files in one request
+    - Step 1 only: Submit metadata without files (can add files later)
+    
+    Form data:
+        case_name: Name/title of the case (required)
+        client_name: Client's full name (required)
+        client_phone: Client's phone number (optional)
+        client_email: Client's email address (optional)
+        files: List of files to upload (optional)
+    
+    Returns:
+        JSON with case_id, case_number, and success message
+    """
     app.logger.info("Received request for /api/create-case")
     try:
-        case_name = request.form['case_name']
+        # Extract metadata from form
+        case_name = request.form.get('case_name')
+        client_name = request.form.get('client_name')
+        client_phone = request.form.get('client_phone', '')
+        client_email = request.form.get('client_email', '')
         files = request.files.getlist('files')
 
-        if not files or not case_name:
-            return jsonify({"message": "Missing case name or files"}), 400
+        # Validate required fields
+        if not case_name or not client_name:
+            return jsonify({
+                "message": "Missing required fields: case_name and client_name are required"
+            }), 400
 
-        case_id = f"case-{uuid.uuid4()}" 
+        # Generate unique IDs
+        case_id = f"case-{uuid.uuid4()}"
+        case_number = generate_case_number()
+        
+        # Prepare metadata
+        case_metadata = {
+            'case_name': case_name,
+            'case_number': case_number,
+            'client_name': client_name,
+            'client_phone': client_phone,
+            'client_email': client_email
+        }
+        
+        app.logger.info(f"Creating case: {case_number} - {case_name} for {client_name}")
+        
+        # If no files provided, create a placeholder entry to store metadata
+        if not files or len(files) == 0:
+            app.logger.info("No files provided. Creating case metadata entry only.")
+            
+            # Store a minimal placeholder entry with metadata
+            placeholder_text = f"Case created: {case_name} for {client_name}. No files uploaded yet."
+            vector = embed_text_snowflake(placeholder_text)
+            
+            if vector:
+                success = store_in_snowflake(
+                    case_id,
+                    "metadata-only",
+                    placeholder_text,
+                    vector,
+                    case_metadata
+                )
+                
+                if success:
+                    return jsonify({
+                        "message": "Case created successfully! You can add files later.",
+                        "case_id": case_id,
+                        "case_number": case_number
+                    }), 201
+                else:
+                    return jsonify({"message": "Failed to create case in database"}), 500
+            else:
+                return jsonify({"message": "Failed to process case metadata"}), 500
 
+        # Process files if provided
+        files_processed = 0
         for file in files:
             filename = file.filename
             
             # --- Step A: Read file ONCE into memory ---
             file.seek(0)
-            file_bytes = file.read() # This reads the entire file into RAM
+            file_bytes = file.read()
 
             # --- Step B: Upload to DigitalOcean Spaces ---
             file_key = f"{case_id}/{filename}"
             
-            # We use io.BytesIO to create a new, in-memory stream from our bytes
             s3_client.upload_fileobj(
-                io.BytesIO(file_bytes), # Use the bytes
+                io.BytesIO(file_bytes),
                 BUCKET_NAME,
                 file_key
             )
             source_url = f"https://{BUCKET_NAME}.{os.getenv('DO_SPACES_REGION')}.digitaloceanspaces.com/{file_key}"
             app.logger.info(f"Uploaded {filename} to {source_url}")
 
-            # --- Step C: Process file based on type, using our in-memory bytes ---
+            # --- Step C: Process file based on type ---
             if filename.lower().endswith(('.pdf', '.txt', '.eml')):
                 app.logger.info(f"Processing text file: {filename}")
                 text = ""
@@ -343,9 +489,13 @@ def create_case():
                         continue
                     app.logger.info(f"✅ Created embedding ({len(vector)} dimensions)")
                     
-                    success = store_in_snowflake(case_id, source_url, chunk, vector)
+                    # Store with metadata (only first chunk gets full metadata to avoid duplication)
+                    metadata_to_store = case_metadata if i == 0 and files_processed == 0 else None
+                    success = store_in_snowflake(case_id, source_url, chunk, vector, metadata_to_store)
                     if success:
                         app.logger.info(f"✅ Stored text chunk {i+1}/{len(chunks)} for {filename}")
+                        if i == 0:
+                            files_processed += 1
                     else:
                         app.logger.error(f"❌ Failed to store text chunk {i+1}/{len(chunks)} for {filename}")
                 
@@ -390,13 +540,170 @@ def create_case():
                     success = store_in_snowflake(case_id, source_url, description, vector)
                     if success:
                         app.logger.info(f"✅ Stored image description for {filename}")
+                        files_processed += 1
                     else:
                         app.logger.error(f"❌ Failed to store image description for {filename}")
 
-        return jsonify({"message": "Case created successfully!", "case_id": case_id}), 201
+        return jsonify({
+            "message": "Case created successfully!", 
+            "case_id": case_id,
+            "case_number": case_number,
+            "files_processed": files_processed
+        }), 201
 
     except Exception as e:
         app.logger.error(f"Error in /create-case: {e}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({"message": f"An internal error occurred: {e}"}), 500
+
+@app.route('/api/add-case-files', methods=['POST'])
+def add_case_files():
+    """
+    Add files to an existing case and build/update the RAG knowledge base.
+    
+    Form data:
+        case_id: The case ID to add files to (required)
+        files: List of files to upload (required)
+    
+    Returns:
+        JSON with success message and files_processed count
+    """
+    app.logger.info("Received request for /api/add-case-files")
+    try:
+        case_id = request.form.get('case_id')
+        files = request.files.getlist('files')
+
+        # Validate inputs
+        if not case_id:
+            return jsonify({"message": "Missing required field: case_id"}), 400
+        
+        if not files or len(files) == 0:
+            return jsonify({"message": "No files provided"}), 400
+        
+        app.logger.info(f"Adding {len(files)} files to case {case_id}")
+        
+        files_processed = 0
+        
+        # Process each file (same logic as create-case)
+        for file in files:
+            filename = file.filename
+            
+            # Read file into memory
+            file.seek(0)
+            file_bytes = file.read()
+
+            # Upload to DigitalOcean Spaces
+            file_key = f"{case_id}/{filename}"
+            s3_client.upload_fileobj(
+                io.BytesIO(file_bytes),
+                BUCKET_NAME,
+                file_key
+            )
+            source_url = f"https://{BUCKET_NAME}.{os.getenv('DO_SPACES_REGION')}.digitaloceanspaces.com/{file_key}"
+            app.logger.info(f"Uploaded {filename} to {source_url}")
+
+            # Process file based on type
+            if filename.lower().endswith(('.pdf', '.txt', '.eml')):
+                app.logger.info(f"Processing text file: {filename}")
+                text = ""
+                pdf_images = []
+                
+                if filename.lower().endswith('.pdf'):
+                    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                        text_pages = []
+                        for page_num, page in enumerate(pdf.pages):
+                            page_text = page.extract_text()
+                            if page_text:
+                                text_pages.append(page_text)
+                            else:
+                                try:
+                                    app.logger.info(f"Page {page_num + 1} has no text, converting to image...")
+                                    img_obj = page.to_image(resolution=150)
+                                    pil_image = img_obj.original
+                                    
+                                    img_byte_arr = io.BytesIO()
+                                    pil_image.save(img_byte_arr, format='PNG')
+                                    img_bytes = img_byte_arr.getvalue()
+                                    
+                                    pdf_images.append({
+                                        'bytes': img_bytes,
+                                        'page': page_num + 1,
+                                        'index': 1
+                                    })
+                                    app.logger.info(f"Converted page {page_num + 1} to image for analysis")
+                                except Exception as img_error:
+                                    app.logger.warning(f"Could not convert page {page_num + 1} to image: {img_error}")
+                        
+                        text = "\n".join(text_pages)
+                else:
+                    text = file_bytes.decode('utf-8', errors='ignore')
+
+                app.logger.info(f"Extracted {len(text)} characters of text from {filename}")
+                
+                # Process text chunks
+                chunks = [chunk.strip() for chunk in text.split('\n\n') if len(chunk.strip()) > 50]
+                app.logger.info(f"Created {len(chunks)} text chunks from {filename}")
+                
+                if len(chunks) == 0 and len(text.strip()) > 0:
+                    chunks = [text]
+
+                for i, chunk in enumerate(chunks):
+                    vector = embed_text_snowflake(chunk)
+                    if vector is None:
+                        app.logger.error(f"❌ Failed to create embedding for text chunk {i+1}")
+                        continue
+                    
+                    # No metadata for additional files (metadata already exists from create-case)
+                    success = store_in_snowflake(case_id, source_url, chunk, vector, None)
+                    if success:
+                        app.logger.info(f"✅ Stored text chunk {i+1}/{len(chunks)} for {filename}")
+                        if i == 0:
+                            files_processed += 1
+                    else:
+                        app.logger.error(f"❌ Failed to store text chunk {i+1}/{len(chunks)}")
+                
+                # Process PDF images
+                for img_data in pdf_images:
+                    img_description = get_image_description(
+                        img_data['bytes'],
+                        context=f"This image is from page {img_data['page']} of a legal case document: {filename}"
+                    )
+                    
+                    vector = embed_text_snowflake(img_description)
+                    if vector is None:
+                        continue
+                    
+                    image_source_url = f"{source_url}#page={img_data['page']}&image={img_data['index']}"
+                    success = store_in_snowflake(case_id, image_source_url, img_description, vector, None)
+                    if success:
+                        app.logger.info(f"✅ Stored PDF image description (page {img_data['page']})")
+
+            elif filename.lower().endswith(('.jpg', '.jpeg', '.png')):
+                app.logger.info(f"Processing standalone image file: {filename}")
+                
+                description = get_image_description(
+                    file_bytes,
+                    context=f"This is a standalone evidence photo: {filename}"
+                )
+                
+                vector = embed_text_snowflake(description)
+                if vector:
+                    success = store_in_snowflake(case_id, source_url, description, vector, None)
+                    if success:
+                        app.logger.info(f"✅ Stored image description for {filename}")
+                        files_processed += 1
+
+        return jsonify({
+            "message": f"Successfully added {files_processed} files to case {case_id}",
+            "case_id": case_id,
+            "files_processed": files_processed
+        }), 200
+
+    except Exception as e:
+        app.logger.error(f"Error in /add-case-files: {e}")
+        import traceback
+        app.logger.error(traceback.format_exc())
         return jsonify({"message": f"An internal error occurred: {e}"}), 500
 
 # --- 4. TEST & UTILITY ROUTES ---
@@ -497,7 +804,8 @@ def view_case_data(case_id):
 @app.route('/api/list-cases', methods=['GET'])
 def list_cases():
     """
-    List all unique case IDs in Snowflake.
+    List all cases with metadata (case_number, case_name, client info).
+    Returns cases sorted by case_number descending (newest first).
     """
     try:
         conn = get_snowflake_conn()
@@ -511,11 +819,16 @@ def list_cases():
                 """
                 SELECT 
                     case_id,
+                    MAX(case_number) as case_number,
+                    MAX(case_name) as case_name,
+                    MAX(client_name) as client_name,
+                    MAX(client_phone) as client_phone,
+                    MAX(client_email) as client_email,
                     COUNT(*) as chunk_count,
-                    MIN(source_url) as sample_source
+                    MIN(source_url) as first_file
                 FROM case_data
                 GROUP BY case_id
-                ORDER BY case_id DESC
+                ORDER BY MAX(case_number) DESC
                 """
             )
             
@@ -525,8 +838,13 @@ def list_cases():
             for row in results:
                 cases.append({
                     'case_id': row[0],
-                    'chunk_count': row[1],
-                    'sample_source': row[2]
+                    'case_number': row[1],
+                    'case_name': row[2],
+                    'client_name': row[3],
+                    'client_phone': row[4],
+                    'client_email': row[5],
+                    'chunk_count': row[6],
+                    'first_file': row[7]
                 })
             
             return jsonify({

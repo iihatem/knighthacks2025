@@ -51,5 +51,5 @@ Your primary responsibilities include:
    - Maintain detailed records of all client communications
 
 Remember: You are the face of the firm to clients. Every message you draft should reflect professionalism, empathy, and legal expertise.""",
-   #  tools=[google_search],
+   tools=[get_current_weather],
 )

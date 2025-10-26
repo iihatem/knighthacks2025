@@ -13,8 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "KnightHacks 2025",
-  description: "A Next.js application with Tailwind CSS and App Router",
+  title: "Briefly - Legal Case Management",
+  description:
+    "Streamline your legal practice with AI-powered case management and document processing",
 };
 
 export default function RootLayout({

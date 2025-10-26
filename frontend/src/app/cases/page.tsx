@@ -1,6 +1,13 @@
+"use client";
+
 import Dashboard from "@/components/Dashboard";
+import Link from "next/link";
+import AddCaseModal from "@/components/AddCaseModal";
+import { useState } from "react";
 
 export default function CasesPage() {
+  const [isAddCaseModalOpen, setIsAddCaseModalOpen] = useState(false);
+
   return (
     <Dashboard>
       <div className="space-y-6">
@@ -8,7 +15,7 @@ export default function CasesPage() {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
           <h1 className="text-2xl font-bold text-gray-800 mb-2">Legal Cases</h1>
           <p className="text-gray-600">
-            Manage and track all your legal cases in one place.
+            Manage and track all your legal cases with Briefly.
           </p>
         </div>
 
@@ -115,44 +122,63 @@ export default function CasesPage() {
 
         {/* Cases List */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200">
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
             <h3 className="text-lg font-medium text-gray-900">Recent Cases</h3>
+            <button
+              onClick={() => setIsAddCaseModalOpen(true)}
+              className="px-4 py-2 bg-orange-500 text-white rounded-full hover:bg-orange-600 transition-colors duration-200 flex items-center space-x-2"
+            >
+              <svg
+                className="h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                />
+              </svg>
+              <span className="text-sm font-medium">Add Case</span>
+            </button>
           </div>
           <div className="p-6">
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center mr-4">
-                    <svg
-                      className="h-5 w-5 text-white"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
+              <Link href="/case/johnson-vs-abc-corp" className="block">
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors duration-200 cursor-pointer">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center mr-4">
+                      <svg
+                        className="h-5 w-5 text-white"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-900">
+                        Johnson vs. ABC Corp
+                      </h4>
+                      <p className="text-sm text-gray-600">
+                        Contract Dispute • Filed 2 days ago
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">
-                      Johnson vs. ABC Corp
-                    </h4>
-                    <p className="text-sm text-gray-600">
-                      Contract Dispute • Filed 2 days ago
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">
-                    Active
-                  </span>
-                  <button className="p-2 text-gray-400 hover:text-gray-600">
+                  <div className="flex items-center space-x-2">
+                    <span className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded-full">
+                      Active
+                    </span>
                     <svg
-                      className="h-4 w-4"
+                      className="h-4 w-4 text-gray-400"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -164,43 +190,43 @@ export default function CasesPage() {
                         d="M9 5l7 7-7 7"
                       />
                     </svg>
-                  </button>
+                  </div>
                 </div>
-              </div>
+              </Link>
 
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center mr-4">
-                    <svg
-                      className="h-5 w-5 text-white"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
+              <Link href="/case/smith-estate-planning" className="block">
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors duration-200 cursor-pointer">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center mr-4">
+                      <svg
+                        className="h-5 w-5 text-white"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-900">
+                        Smith Estate Planning
+                      </h4>
+                      <p className="text-sm text-gray-600">
+                        Estate Law • Filed 1 week ago
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">
-                      Smith Estate Planning
-                    </h4>
-                    <p className="text-sm text-gray-600">
-                      Estate Law • Filed 1 week ago
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
-                    Completed
-                  </span>
-                  <button className="p-2 text-gray-400 hover:text-gray-600">
+                  <div className="flex items-center space-x-2">
+                    <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
+                      Completed
+                    </span>
                     <svg
-                      className="h-4 w-4"
+                      className="h-4 w-4 text-gray-400"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -212,43 +238,43 @@ export default function CasesPage() {
                         d="M9 5l7 7-7 7"
                       />
                     </svg>
-                  </button>
+                  </div>
                 </div>
-              </div>
+              </Link>
 
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-red-500 rounded-lg flex items-center justify-center mr-4">
-                    <svg
-                      className="h-5 w-5 text-white"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
+              <Link href="/case/davis-personal-injury" className="block">
+                <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors duration-200 cursor-pointer">
+                  <div className="flex items-center">
+                    <div className="w-10 h-10 bg-red-500 rounded-lg flex items-center justify-center mr-4">
+                      <svg
+                        className="h-5 w-5 text-white"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-gray-900">
+                        Davis Personal Injury
+                      </h4>
+                      <p className="text-sm text-gray-600">
+                        Personal Injury • Filed 3 days ago
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-medium text-gray-900">
-                      Davis Personal Injury
-                    </h4>
-                    <p className="text-sm text-gray-600">
-                      Personal Injury • Filed 3 days ago
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">
-                    Urgent
-                  </span>
-                  <button className="p-2 text-gray-400 hover:text-gray-600">
+                  <div className="flex items-center space-x-2">
+                    <span className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded-full">
+                      Urgent
+                    </span>
                     <svg
-                      className="h-4 w-4"
+                      className="h-4 w-4 text-gray-400"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -260,13 +286,19 @@ export default function CasesPage() {
                         d="M9 5l7 7-7 7"
                       />
                     </svg>
-                  </button>
+                  </div>
                 </div>
-              </div>
+              </Link>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Add Case Modal */}
+      <AddCaseModal
+        isOpen={isAddCaseModalOpen}
+        onClose={() => setIsAddCaseModalOpen(false)}
+      />
     </Dashboard>
   );
 }

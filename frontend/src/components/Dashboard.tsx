@@ -51,12 +51,6 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
       href: "/analytics",
       current: pathname === "/analytics",
     },
-    {
-      name: "Settings",
-      icon: CogIcon,
-      href: "/settings",
-      current: pathname === "/settings",
-    },
   ];
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,7 +75,7 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
     >
       {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out flex flex-col ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -90,18 +84,13 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
           style={{ borderColor: "var(--color-gray-light)" }}
         >
           <div className="flex items-center">
-            <div
-              className="w-8 h-8 rounded-lg mr-3 flex items-center justify-center"
-              style={{ backgroundColor: "var(--color-accent-orange)" }}
-            >
-              <span className="text-white font-bold text-sm">L</span>
+            <div className="w-18 h-18 flex items-center justify-center">
+              <img
+                src="/briefly_logo.svg"
+                alt="Briefly Logo"
+                className="w-full h-full"
+              />
             </div>
-            <h1
-              className="text-xl font-bold"
-              style={{ color: "var(--color-text-primary)" }}
-            >
-              LegalAI
-            </h1>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -111,43 +100,80 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
           </button>
         </div>
 
-        <nav className="mt-5 px-2">
-          <div className="space-y-1">
-            {navigationItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`${
-                    item.current ? "border-r-2" : "hover:bg-gray-50"
-                  } group flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200`}
-                  style={{
-                    backgroundColor: item.current
-                      ? "rgba(255, 87, 51, 0.1)"
-                      : "transparent",
-                    color: item.current
-                      ? "var(--color-accent-orange)"
-                      : "var(--color-text-secondary)",
-                    borderColor: item.current
-                      ? "var(--color-accent-orange)"
-                      : "transparent",
-                  }}
-                >
-                  <Icon
-                    className="mr-3 h-5 w-5"
+        <div className="flex flex-col flex-1">
+          <nav className="mt-5 px-2 flex-1">
+            <div className="space-y-2">
+              {navigationItems.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={`${
+                      item.current ? "border-r-2" : "hover:bg-gray-50"
+                    } group flex items-center px-4 py-4 text-base font-medium rounded-lg transition-all duration-200`}
                     style={{
+                      backgroundColor: item.current
+                        ? "rgba(255, 87, 51, 0.1)"
+                        : "transparent",
                       color: item.current
                         ? "var(--color-accent-orange)"
-                        : "var(--color-gray-medium)",
+                        : "var(--color-text-secondary)",
+                      borderColor: item.current
+                        ? "var(--color-accent-orange)"
+                        : "transparent",
                     }}
-                  />
-                  {item.name}
-                </Link>
-              );
-            })}
+                  >
+                    <Icon
+                      className="mr-4 h-6 w-6"
+                      style={{
+                        color: item.current
+                          ? "var(--color-accent-orange)"
+                          : "var(--color-gray-medium)",
+                      }}
+                    />
+                    {item.name}
+                  </Link>
+                );
+              })}
+            </div>
+          </nav>
+
+          {/* Settings Button at Bottom */}
+          <div className="px-2 pb-4">
+            <Link
+              href="/settings"
+              className={`${
+                pathname === "/settings" ? "border-r-2" : "hover:bg-gray-50"
+              } group flex items-center px-4 py-4 text-base font-medium rounded-lg transition-all duration-200`}
+              style={{
+                backgroundColor:
+                  pathname === "/settings"
+                    ? "rgba(255, 87, 51, 0.1)"
+                    : "transparent",
+                color:
+                  pathname === "/settings"
+                    ? "var(--color-accent-orange)"
+                    : "var(--color-text-secondary)",
+                borderColor:
+                  pathname === "/settings"
+                    ? "var(--color-accent-orange)"
+                    : "transparent",
+              }}
+            >
+              <CogIcon
+                className="mr-4 h-6 w-6"
+                style={{
+                  color:
+                    pathname === "/settings"
+                      ? "var(--color-accent-orange)"
+                      : "var(--color-gray-medium)",
+                }}
+              />
+              Settings
+            </Link>
           </div>
-        </nav>
+        </div>
       </div>
 
       {/* Main content */}

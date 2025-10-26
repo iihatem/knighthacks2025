@@ -213,6 +213,95 @@ export const healthCheck = async (): Promise<string> => {
 };
 
 // ============================================
+// 5. ACTIVITY MANAGEMENT APIs
+// ============================================
+
+/**
+ * Get activities for a specific case
+ * GET /api/activities/<case_id>
+ */
+export const getActivities = async (
+  caseId: string,
+  status?: string
+): Promise<any> => {
+  const url = status
+    ? `${API_BASE_URL}/api/activities/${caseId}?status=${status}`
+    : `${API_BASE_URL}/api/activities/${caseId}`;
+
+  const response = await fetch(url, {
+    method: "GET",
+  });
+
+  await handleApiError(response);
+  return response.json();
+};
+
+/**
+ * Approve an activity
+ * POST /api/activities/<activity_id>/approve
+ */
+export const approveActivity = async (
+  activityId: string,
+  approvedBy: string
+): Promise<any> => {
+  const response = await fetch(
+    `${API_BASE_URL}/api/activities/${activityId}/approve`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        approved_by: approvedBy,
+      }),
+    }
+  );
+
+  await handleApiError(response);
+  return response.json();
+};
+
+/**
+ * Reject an activity
+ * POST /api/activities/<activity_id>/reject
+ */
+export const rejectActivity = async (
+  activityId: string,
+  approvedBy: string,
+  reason: string
+): Promise<any> => {
+  const response = await fetch(
+    `${API_BASE_URL}/api/activities/${activityId}/reject`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        approved_by: approvedBy,
+        reason: reason,
+      }),
+    }
+  );
+
+  await handleApiError(response);
+  return response.json();
+};
+
+/**
+ * Get all pending activities across all cases
+ * GET /api/activities/pending
+ */
+export const getPendingActivities = async (): Promise<any> => {
+  const response = await fetch(`${API_BASE_URL}/api/activities/pending`, {
+    method: "GET",
+  });
+
+  await handleApiError(response);
+  return response.json();
+};
+
+// ============================================
 // 5. UTILITY FUNCTIONS
 // ============================================
 

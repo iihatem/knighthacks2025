@@ -87,19 +87,22 @@ export interface RAGSearchResponse {
 export interface AgentProcessRequest {
   case_id: string;
   query: string;
+  session_id?: string;
 }
 
 export interface AgentProcessResponse {
   status: string;
-  result: {
-    orchestrator_analysis?: string;
-    delegated_to?: string;
-    proposed_actions?: Array<{
-      agent: string;
-      draft: string;
-      requires_approval: boolean;
-    }>;
-  };
+  session_id?: string;
+  is_continuation?: boolean;
+  topic?: string;
+  action_type?: string;
+  requires_approval?: boolean;
+  activity_logged?: boolean;
+  activity_id?: string;
+  agent_type?: string;
+  result: string | any;
+  agent_response?: any;
+  reasoning?: string;
 }
 
 export interface SnowflakeDebugResponse {

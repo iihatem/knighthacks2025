@@ -1,16 +1,12 @@
 "use client";
 
 import Dashboard from "@/components/Dashboard";
+import ApprovalCard from "@/components/ApprovalCard";
 import { useCaseData } from "@/hooks/useCases";
-import { useRAGSearch, useAgentProcess } from "@/hooks/useRAG";
 import { useState, useRef, useEffect, use } from "react";
-import {
-  PaperAirplaneIcon,
-  DocumentIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  PaperClipIcon,
-} from "@heroicons/react/24/outline";
+import { PaperAirplaneIcon, PaperClipIcon } from "@heroicons/react/24/outline";
+import { processWithAgent } from "@/lib/api";
+import { getActivities, approveActivity, rejectActivity } from "@/lib/api";
 
 interface CasePageProps {
   params: Promise<{
@@ -20,17 +16,12 @@ interface CasePageProps {
 
 interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   content: string;
   timestamp: Date;
-}
-
-interface ActionCard {
-  id: string;
-  type: "email" | "task" | "research" | "document";
-  title: string;
-  content: string;
-  status: "pending" | "approved" | "rejected";
+  action_type?: string;
+  requires_approval?: boolean;
+  activity_id?: string;
 }
 
 export default function CasePage({ params }: CasePageProps) {
@@ -49,17 +40,12 @@ export default function CasePage({ params }: CasePageProps) {
   }
 
   const { caseData: apiCaseData, loading, error } = useCaseData(caseId);
-  const { search: ragSearch, results: ragResults } = useRAGSearch();
-  const {
-    process: agentProcess,
-    result: agentResult,
-    loading: agentLoading,
-  } = useAgentProcess();
 
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [actionCards, setActionCards] = useState<ActionCard[]>([]);
+  const [pendingActivities, setPendingActivities] = useState<any[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom of chat
@@ -67,10 +53,24 @@ export default function CasePage({ params }: CasePageProps) {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages]);
 
+  // Fetch pending activities on mount
+  useEffect(() => {
+    if (caseId) {
+      fetchPendingActivities();
+    }
+  }, [caseId]);
+
+  const fetchPendingActivities = async () => {
+    try {
+      const response = await getActivities(caseId, "pending");
+      setPendingActivities(response.activities || []);
+    } catch (error) {
+      console.error("Error fetching activities:", error);
+    }
+  };
+
   // Get case name from API data
-  // The API returns case metadata in case_metadata field
   const caseName = apiCaseData?.case_metadata?.case_name || "Loading case...";
-  const caseNumber = apiCaseData?.case_metadata?.case_number || caseId || "";
   const clientName = apiCaseData?.case_metadata?.client_name || "";
 
   // Format case display name with null safety
@@ -92,48 +92,51 @@ export default function CasePage({ params }: CasePageProps) {
     };
 
     setChatMessages((prev) => [...prev, userMessage]);
+    const currentInput = chatInput;
     setChatInput("");
     setIsProcessing(true);
 
     try {
-      // Process with AI agent
-      const response = await agentProcess({
+      // Call the real API
+      const response = await processWithAgent({
         case_id: caseId,
-        query: chatInput,
+        query: currentInput,
+        session_id: sessionId || undefined,
       });
 
-      // Add assistant response
+      // Update session ID
+      if (response.session_id) {
+        setSessionId(response.session_id);
+      }
+
+      // Add AI response to chat
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content:
-          response.result.proposed_actions?.[0]?.draft ||
-          "I've processed your request. Here's what I found...",
+          typeof response.result === "string"
+            ? response.result
+            : JSON.stringify(response.result, null, 2),
         timestamp: new Date(),
+        action_type: response.action_type,
+        requires_approval: response.requires_approval,
+        activity_id: response.activity_id,
       };
 
       setChatMessages((prev) => [...prev, assistantMessage]);
 
-      // Create action cards based on response
-      if (response.result.proposed_actions) {
-        const newCards: ActionCard[] = response.result.proposed_actions.map(
-          (action, index) => ({
-            id: `${Date.now()}-${index}`,
-            type: determineActionType(action.agent),
-            title: `${action.agent} - Action Required`,
-            content: action.draft,
-            status: "pending" as const,
-          })
-        );
-        setActionCards((prev) => [...prev, ...newCards]);
+      // If requires approval, fetch updated activities
+      if (response.requires_approval && response.activity_logged) {
+        await fetchPendingActivities();
       }
     } catch (error) {
       console.error("Error processing message:", error);
       const errorMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content:
-          "I apologize, but I encountered an error processing your request. Please try again.",
+        role: "system",
+        content: `Error: ${
+          error instanceof Error ? error.message : "Failed to process message"
+        }`,
         timestamp: new Date(),
       };
       setChatMessages((prev) => [...prev, errorMessage]);
@@ -142,81 +145,45 @@ export default function CasePage({ params }: CasePageProps) {
     }
   };
 
-  const determineActionType = (agentName: string): ActionCard["type"] => {
-    if (agentName.toLowerCase().includes("communication")) return "email";
-    if (agentName.toLowerCase().includes("research")) return "research";
-    if (agentName.toLowerCase().includes("record")) return "document";
-    return "task";
+  const handleApprove = async (activityId: string) => {
+    try {
+      await approveActivity(activityId, "lawyer@firm.com");
+
+      // Add system message
+      const systemMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: "system",
+        content: "✅ Action approved and executed!",
+        timestamp: new Date(),
+      };
+      setChatMessages((prev) => [...prev, systemMessage]);
+
+      // Refresh activities
+      await fetchPendingActivities();
+    } catch (error) {
+      console.error("Error approving activity:", error);
+      alert("Failed to approve activity");
+    }
   };
 
-  const handleApproveAction = (cardId: string) => {
-    setActionCards((prev) =>
-      prev.map((card) =>
-        card.id === cardId ? { ...card, status: "approved" as const } : card
-      )
-    );
-  };
+  const handleReject = async (activityId: string, reason: string) => {
+    try {
+      await rejectActivity(activityId, "lawyer@firm.com", reason);
 
-  const handleRejectAction = (cardId: string) => {
-    setActionCards((prev) =>
-      prev.map((card) =>
-        card.id === cardId ? { ...card, status: "rejected" as const } : card
-      )
-    );
-  };
+      // Add system message
+      const systemMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: "system",
+        content: "❌ Action rejected. You can ask me to revise it.",
+        timestamp: new Date(),
+      };
+      setChatMessages((prev) => [...prev, systemMessage]);
 
-  const getActionIcon = (type: ActionCard["type"]) => {
-    switch (type) {
-      case "email":
-        return (
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-            />
-          </svg>
-        );
-      case "document":
-        return <DocumentIcon className="h-5 w-5" />;
-      case "research":
-        return (
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-        );
-      default:
-        return (
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-            />
-          </svg>
-        );
+      // Refresh activities
+      await fetchPendingActivities();
+    } catch (error) {
+      console.error("Error rejecting activity:", error);
+      alert("Failed to reject activity");
     }
   };
 
@@ -249,15 +216,9 @@ export default function CasePage({ params }: CasePageProps) {
             <h1 className="text-lg font-semibold text-gray-800">
               {displayCaseName}
             </h1>
-            <div className="flex items-center space-x-3 mt-1">
-              <p className="text-sm text-gray-500">{caseNumber}</p>
-              {clientName && (
-                <>
-                  <span className="text-gray-300">•</span>
-                  <p className="text-sm text-gray-500">Client: {clientName}</p>
-                </>
-              )}
-            </div>
+            {clientName && (
+              <p className="text-sm text-gray-500 mt-1">Client: {clientName}</p>
+            )}
           </div>
         </div>
 
@@ -265,75 +226,102 @@ export default function CasePage({ params }: CasePageProps) {
         <div className="max-w-4xl mx-auto">
           <div className="bg-white rounded-3xl shadow-sm border border-gray-200 p-6">
             {/* Chat Messages */}
-            <div className="mb-4 max-h-96 overflow-y-auto space-y-4">
-              {chatMessages.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+            <div className="h-96 overflow-y-auto mb-4 space-y-4">
+              {chatMessages.length === 0 && (
+                <div className="text-center text-gray-500 mt-10">
                   <p className="text-lg font-medium mb-2">
-                    Type here to get started...
+                    👋 Hi! I'm your AI legal assistant
                   </p>
                   <p className="text-sm">
-                    Ask me to draft emails, research case law, organize files,
-                    or schedule meetings.
+                    Ask me to research case law, draft emails, schedule
+                    appointments, or anything else!
                   </p>
+                  <div className="mt-6 text-left bg-gray-50 rounded-lg p-4">
+                    <p className="text-sm font-medium text-gray-700 mb-2">
+                      Try asking:
+                    </p>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      <li>• "What injuries did the client suffer?"</li>
+                      <li>
+                        • "Draft an email to the client about the settlement"
+                      </li>
+                      <li>
+                        • "Schedule a meeting with the client for Thursday"
+                      </li>
+                      <li>• "Research similar slip and fall cases"</li>
+                    </ul>
+                  </div>
                 </div>
-              ) : (
-                chatMessages.map((message) => (
+              )}
+
+              {chatMessages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${
+                    message.role === "user" ? "justify-end" : "justify-start"
+                  }`}
+                >
                   <div
-                    key={message.id}
-                    className={`flex ${
-                      message.role === "user" ? "justify-end" : "justify-start"
+                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
+                      message.role === "user"
+                        ? "bg-orange-500 text-white"
+                        : message.role === "system"
+                        ? "bg-gray-200 text-gray-800 italic"
+                        : "bg-gray-100 text-gray-800"
                     }`}
                   >
-                    <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    <span
+                      className={`block text-right text-xs mt-1 ${
                         message.role === "user"
-                          ? "bg-orange-500 text-white"
-                          : "bg-gray-100 text-gray-800"
+                          ? "text-orange-100"
+                          : "text-gray-500"
                       }`}
                     >
-                      <p className="text-sm whitespace-pre-wrap">
-                        {message.content}
-                      </p>
-                      <p
-                        className={`text-xs mt-1 ${
-                          message.role === "user"
-                            ? "text-orange-100"
-                            : "text-gray-500"
-                        }`}
-                      >
-                        {message.timestamp.toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </div>
+                      {message.timestamp.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    {message.requires_approval && (
+                      <div className="mt-2 pt-2 border-t border-gray-300">
+                        <p className="text-xs text-orange-600 font-medium">
+                          ⚠️ Approval required - see below
+                        </p>
+                      </div>
+                    )}
                   </div>
-                ))
-              )}
+                </div>
+              ))}
+
               {isProcessing && (
                 <div className="flex justify-start">
-                  <div className="bg-gray-100 rounded-2xl px-4 py-3">
-                    <div className="flex space-x-2">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div
-                        className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                        style={{ animationDelay: "0.1s" }}
-                      ></div>
-                      <div
-                        className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                        style={{ animationDelay: "0.2s" }}
-                      ></div>
+                  <div className="max-w-xs lg:max-w-md px-4 py-3 rounded-2xl bg-gray-100 text-gray-800">
+                    <div className="flex items-center space-x-2">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                        <div
+                          className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                          style={{ animationDelay: "0.1s" }}
+                        ></div>
+                        <div
+                          className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                          style={{ animationDelay: "0.2s" }}
+                        ></div>
+                      </div>
+                      <span className="text-sm">AI is thinking...</span>
                     </div>
                   </div>
                 </div>
               )}
+
               <div ref={chatEndRef} />
             </div>
 
             {/* Chat Input */}
-            <div className="flex items-center space-x-3">
-              <button className="p-3 text-gray-400 hover:text-gray-600 transition-colors">
-                <PaperClipIcon className="h-5 w-5" />
+            <div className="flex items-center space-x-3 border-t border-gray-200 pt-4">
+              <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                <PaperClipIcon className="h-6 w-6" />
               </button>
               <input
                 type="text"
@@ -345,109 +333,37 @@ export default function CasePage({ params }: CasePageProps) {
                     handleSendMessage();
                   }
                 }}
-                placeholder="Type here..."
-                className="flex-1 px-4 py-3 bg-gray-50 rounded-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                placeholder="Ask me to research, draft emails, schedule appointments..."
+                className="flex-1 px-4 py-3 bg-gray-50 rounded-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-800"
                 disabled={isProcessing}
               />
               <button
                 onClick={handleSendMessage}
+                className="p-3 bg-orange-500 text-white rounded-full hover:bg-orange-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={isProcessing || !chatInput.trim()}
-                className="p-3 bg-orange-500 text-white rounded-full hover:bg-orange-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <PaperAirplaneIcon className="h-5 w-5" />
+                <PaperAirplaneIcon className="h-6 w-6" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Action Cards - Below Chat */}
-        {actionCards.length > 0 && (
-          <div className="max-w-4xl mx-auto space-y-4">
-            <h2 className="text-lg font-semibold text-gray-800">
-              Researched for 3 mins...
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {actionCards.map((card) => (
-                <div
-                  key={card.id}
-                  className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center space-x-2">
-                      <div className="p-2 bg-orange-100 rounded-lg text-orange-600">
-                        {getActionIcon(card.type)}
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-gray-800 text-sm">
-                          {card.title}
-                        </h3>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-sm text-gray-600 mb-4 line-clamp-3">
-                    {card.content}
-                  </p>
-
-                  {card.status === "pending" && (
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleApproveAction(card.id)}
-                        className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm"
-                      >
-                        <CheckCircleIcon className="h-4 w-4" />
-                        <span>Approve</span>
-                      </button>
-                      <button
-                        onClick={() => handleRejectAction(card.id)}
-                        className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm"
-                      >
-                        <XCircleIcon className="h-4 w-4" />
-                        <span>Reject</span>
-                      </button>
-                    </div>
-                  )}
-
-                  {card.status === "approved" && (
-                    <div className="flex items-center space-x-2 text-green-600 text-sm">
-                      <CheckCircleIcon className="h-5 w-5" />
-                      <span className="font-medium">Approved</span>
-                    </div>
-                  )}
-
-                  {card.status === "rejected" && (
-                    <div className="flex items-center space-x-2 text-red-600 text-sm">
-                      <XCircleIcon className="h-5 w-5" />
-                      <span className="font-medium">Rejected</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Organized Files Section */}
-        {apiCaseData && apiCaseData.total_chunks > 1 && (
+        {/* Pending Approvals */}
+        {pendingActivities.length > 0 && (
           <div className="max-w-4xl mx-auto">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-800 mb-4">
-                Organized {apiCaseData.total_chunks} files for Salesforce
-              </h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {apiCaseData.data.slice(0, 8).map((chunk, index) => (
-                  <div
-                    key={index}
-                    className="flex flex-col items-center p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
-                  >
-                    <DocumentIcon className="h-12 w-12 text-gray-400 mb-2" />
-                    <p className="text-xs text-gray-600 text-center truncate w-full">
-                      {chunk.source_url.split("/").pop() || "Document"}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <h2 className="text-xl font-bold text-gray-800 mb-4">
+              ⚠️ Actions Awaiting Your Approval
+            </h2>
+            {pendingActivities.map((activity) => (
+              <ApprovalCard
+                key={activity.activity_id}
+                activity={activity}
+                onApprove={() => handleApprove(activity.activity_id)}
+                onReject={(reason) =>
+                  handleReject(activity.activity_id, reason)
+                }
+              />
+            ))}
           </div>
         )}
       </div>

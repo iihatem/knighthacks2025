@@ -89,107 +89,54 @@ export default function Home() {
               </div>
             </div>
             <div className="space-y-4">
-              <Link href="/case/personal-injury-case" className="block">
-                <div className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200 cursor-pointer">
-                  <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center mr-3">
-                    <svg
-                      className="h-5 w-5 text-white"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-800">
-                      Personal Injury Case
-                    </h4>
-                    <p className="text-sm text-gray-600">Client: John Smith</p>
-                    <div className="flex items-center mt-1">
-                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                        Active
-                      </span>
-                      <span className="ml-2 text-xs text-gray-500">
-                        2 days ago
-                      </span>
+              {loading ? (
+                <p className="text-gray-600">Loading cases...</p>
+              ) : error ? (
+                <p className="text-red-500">Error: {error}</p>
+              ) : cases.length === 0 ? (
+                <p className="text-gray-600">No recent cases found.</p>
+              ) : (
+                cases.slice(0, 3).map((caseItem) => (
+                  <Link
+                    href={`/case/${caseItem.case_id}`}
+                    key={caseItem.case_id}
+                    className="block"
+                  >
+                    <div className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200 cursor-pointer">
+                      <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center mr-3">
+                        <svg
+                          className="h-5 w-5 text-white"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
+                        </svg>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-medium text-gray-800">
+                          {caseItem.case_name || caseItem.case_id}
+                        </h4>
+                        {caseItem.client_name && (
+                          <p className="text-sm text-gray-600">
+                            Client: {caseItem.client_name}
+                          </p>
+                        )}
+                        <div className="flex items-center mt-1">
+                          <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                            Active
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              </Link>
-
-              <Link href="/case/contract-dispute" className="block">
-                <div className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200 cursor-pointer">
-                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center mr-3">
-                    <svg
-                      className="h-5 w-5 text-white"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-800">
-                      Contract Dispute
-                    </h4>
-                    <p className="text-sm text-gray-600">Client: ABC Corp</p>
-                    <div className="flex items-center mt-1">
-                      <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                        Pending
-                      </span>
-                      <span className="ml-2 text-xs text-gray-500">
-                        1 week ago
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </Link>
-
-              <Link href="/case/employment-law" className="block">
-                <div className="flex items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors duration-200 cursor-pointer">
-                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center mr-3">
-                    <svg
-                      className="h-5 w-5 text-white"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="font-medium text-gray-800">
-                      Employment Law
-                    </h4>
-                    <p className="text-sm text-gray-600">Client: Jane Doe</p>
-                    <div className="flex items-center mt-1">
-                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                        Completed
-                      </span>
-                      <span className="ml-2 text-xs text-gray-500">
-                        2 weeks ago
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </Link>
+                  </Link>
+                ))
+              )}
             </div>
           </div>
 

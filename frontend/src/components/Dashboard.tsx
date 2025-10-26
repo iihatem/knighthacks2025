@@ -1,8 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  processWithAgent,
+  getActivities,
+  approveActivity,
+  rejectActivity,
+} from "@/lib/api";
+import { useCases } from "@/hooks/useCases";
 import {
   HomeIcon,
   DocumentTextIcon,
@@ -14,16 +21,48 @@ import {
   UserCircleIcon,
   PaperClipIcon,
   XMarkIcon,
+  PaperAirplaneIcon,
+  MinusIcon,
+  ChatBubbleLeftRightIcon,
 } from "@heroicons/react/24/outline";
 
 interface DashboardProps {
   children?: React.ReactNode;
 }
 
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: Date;
+}
+
 const Dashboard: React.FC<DashboardProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [showCaseSelector, setShowCaseSelector] = useState(false);
+  const [isChatMinimized, setIsChatMinimized] = useState(false);
+
   const pathname = usePathname();
+  const { cases, loading: casesLoading } = useCases();
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-select first case if none selected
+  useEffect(() => {
+    if (!selectedCaseId && cases.length > 0) {
+      setSelectedCaseId(cases[0].case_id);
+    }
+  }, [cases, selectedCaseId]);
+
+  // Auto-scroll in chat messages
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
 
   const navigationItems = [
     { name: "Dashboard", icon: HomeIcon, href: "/", current: pathname === "/" },
@@ -60,12 +99,71 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
 
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
     event.preventDefault();
-    const files = Array.from(event.dataTransfer.files);
-    setAttachments((prev) => [...prev, ...files]);
+    const droppedFiles = Array.from(event.dataTransfer.files);
+    setAttachments((prev) => [...prev, ...droppedFiles]);
   };
 
   const removeAttachment = (index: number) => {
     setAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || isProcessing) return;
+
+    if (!selectedCaseId) {
+      alert("Please select a case first by clicking on the chat box");
+      setShowCaseSelector(true);
+      return;
+    }
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content: chatInput,
+      timestamp: new Date(),
+    };
+
+    setChatMessages((prev) => [...prev, userMessage]);
+    const currentInput = chatInput;
+    setChatInput("");
+    setIsProcessing(true);
+
+    try {
+      const response = await processWithAgent({
+        case_id: selectedCaseId,
+        query: currentInput,
+        session_id: sessionId || undefined,
+      });
+
+      if (response.session_id) {
+        setSessionId(response.session_id);
+      }
+
+      const assistantMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content:
+          typeof response.result === "string"
+            ? response.result
+            : JSON.stringify(response.result, null, 2),
+        timestamp: new Date(),
+      };
+
+      setChatMessages((prev) => [...prev, assistantMessage]);
+    } catch (error) {
+      console.error("Error processing message:", error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "system",
+        content: `Error: ${
+          error instanceof Error ? error.message : "Failed to process message"
+        }`,
+        timestamp: new Date(),
+      };
+      setChatMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -358,98 +456,294 @@ const Dashboard: React.FC<DashboardProps> = ({ children }) => {
         {/* Main content area */}
         <main className="flex-1 p-6">{children}</main>
 
-        {/* Floating Chat - Centered, Skinny, Wide with Round Edges */}
-        <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-40 w-full max-w-4xl px-4">
-          <div
-            className="rounded-3xl shadow-2xl border p-6"
-            style={{
-              backgroundColor: "var(--color-bg-card)",
-              borderColor: "var(--color-gray-light)",
-            }}
-            onDrop={handleDrop}
-            onDragOver={(e) => e.preventDefault()}
-            onDragEnter={(e) => e.preventDefault()}
-          >
-            {/* Attachments display */}
-            {attachments.length > 0 && (
-              <div className="mb-4">
-                <div className="flex flex-wrap gap-2">
-                  {attachments.map((file, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center rounded-full px-3 py-1 text-xs border"
-                      style={{
-                        backgroundColor: "rgba(255, 87, 51, 0.1)",
-                        borderColor: "var(--color-accent-orange)",
-                      }}
-                    >
-                      <PaperClipIcon
-                        className="h-3 w-3 mr-2"
-                        style={{ color: "var(--color-accent-orange)" }}
-                      />
-                      <span
-                        className="truncate max-w-32"
-                        style={{ color: "var(--color-accent-orange)" }}
-                      >
-                        {file.name}
-                      </span>
-                      <button
-                        onClick={() => removeAttachment(index)}
-                        className="ml-2"
-                        style={{ color: "var(--color-accent-orange)" }}
-                      >
-                        <XMarkIcon className="h-3 w-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+        {/* Floating Chat - Minimized Button */}
+        {isChatMinimized && (
+          <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-40">
+            <button
+              onClick={() => setIsChatMinimized(false)}
+              className="px-8 py-4 bg-orange-500 text-white rounded-full shadow-2xl hover:bg-orange-600 transition-all duration-200 flex items-center space-x-3 font-medium"
+            >
+              <ChatBubbleLeftRightIcon className="h-6 w-6" />
+              <span>
+                {selectedCaseId
+                  ? `Chat about ${
+                      cases.find((c) => c.case_id === selectedCaseId)
+                        ?.case_name || "case"
+                    }`
+                  : "Open AI Assistant"}
+              </span>
+              {chatMessages.length > 0 && (
+                <span className="px-2 py-1 bg-white text-orange-600 rounded-full text-xs font-bold">
+                  {chatMessages.length}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
 
-            {/* Chat input */}
-            <div className="flex items-center space-x-4">
-              <div className="flex-1">
-                <input
-                  type="text"
-                  placeholder="Ask me anything about your legal case..."
-                  className="w-full px-6 py-4 rounded-full border-0 focus:outline-none"
-                  style={{
-                    backgroundColor: "var(--color-gray-light)",
-                    color: "var(--color-text-primary)",
-                  }}
-                />
-              </div>
-              <div className="flex items-center space-x-2">
-                <label
-                  className="cursor-pointer p-3 rounded-full transition-all duration-200"
-                  style={{ color: "var(--color-gray-medium)" }}
-                >
-                  <PaperClipIcon className="h-5 w-5" />
-                  <input
-                    type="file"
-                    multiple
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </label>
+        {/* Floating Chat - Expanded (Centered, Skinny, Wide with Round Edges + AI Functionality) */}
+        {!isChatMinimized && (
+          <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-40 w-full max-w-4xl px-4">
+            <div
+              className="rounded-3xl shadow-2xl border p-6"
+              style={{
+                backgroundColor: "var(--color-bg-card)",
+                borderColor: "var(--color-gray-light)",
+              }}
+              onDrop={handleDrop}
+              onDragOver={(e) => e.preventDefault()}
+              onDragEnter={(e) => e.preventDefault()}
+            >
+              {/* Chat Header with Minimize Button */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <ChatBubbleLeftRightIcon className="h-5 w-5 text-orange-600" />
+                  <span className="text-sm font-medium text-gray-700">
+                    AI Legal Assistant
+                  </span>
+                </div>
                 <button
-                  className="px-6 py-4 text-white rounded-full transition-all duration-200 font-medium"
-                  style={{ backgroundColor: "var(--color-accent-orange)" }}
+                  onClick={() => setIsChatMinimized(true)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  title="Minimize chat"
                 >
-                  Send
+                  <MinusIcon className="h-5 w-5 text-gray-500" />
                 </button>
               </div>
-            </div>
 
-            {/* Drag and drop hint */}
-            <div
-              className="mt-3 text-xs text-center"
-              style={{ color: "var(--color-gray-medium)" }}
-            >
-              Drag and drop files here or click the attachment icon
+              {/* Case Selector (shown when clicked or when no case selected) */}
+              {(showCaseSelector || !selectedCaseId) && (
+                <div className="mb-4 p-3 bg-orange-50 rounded-2xl border border-orange-200">
+                  <label className="text-xs font-medium text-orange-800 block mb-2">
+                    Select a case to chat about:
+                  </label>
+                  <select
+                    value={selectedCaseId || ""}
+                    onChange={(e) => {
+                      setSelectedCaseId(e.target.value);
+                      setShowCaseSelector(false);
+                    }}
+                    className="w-full px-4 py-2 text-sm border border-orange-300 rounded-full focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    disabled={casesLoading}
+                  >
+                    <option value="">
+                      {casesLoading ? "Loading cases..." : "Choose a case..."}
+                    </option>
+                    {cases.map((caseItem) => (
+                      <option key={caseItem.case_id} value={caseItem.case_id}>
+                        {caseItem.case_name || caseItem.case_id}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Chat Messages (if any) */}
+              {chatMessages.length > 0 && (
+                <div className="mb-4 max-h-48 overflow-y-auto space-y-2">
+                  {chatMessages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={`flex ${
+                        message.role === "user"
+                          ? "justify-end"
+                          : "justify-start"
+                      }`}
+                    >
+                      <div
+                        className={`max-w-md px-4 py-2 rounded-2xl text-sm ${
+                          message.role === "user"
+                            ? "bg-orange-500 text-white"
+                            : message.role === "system"
+                            ? "bg-red-100 text-red-800"
+                            : "bg-gray-100 text-gray-800"
+                        }`}
+                      >
+                        <p className="whitespace-pre-wrap break-words">
+                          {message.content}
+                        </p>
+                        <span
+                          className={`block text-right text-xs mt-1 ${
+                            message.role === "user"
+                              ? "text-orange-100"
+                              : "text-gray-500"
+                          }`}
+                        >
+                          {message.timestamp.toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {isProcessing && (
+                    <div className="flex justify-start">
+                      <div className="max-w-md px-4 py-2 rounded-2xl bg-gray-100 text-gray-800">
+                        <div className="flex items-center space-x-2">
+                          <div className="flex space-x-1">
+                            <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                            <div
+                              className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                              style={{ animationDelay: "0.1s" }}
+                            ></div>
+                            <div
+                              className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                              style={{ animationDelay: "0.2s" }}
+                            ></div>
+                          </div>
+                          <span className="text-xs">AI is thinking...</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+              )}
+
+              {/* Attachments display */}
+              {attachments.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex flex-wrap gap-2">
+                    {attachments.map((file, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center rounded-full px-3 py-1 text-xs border"
+                        style={{
+                          backgroundColor: "rgba(255, 87, 51, 0.1)",
+                          borderColor: "var(--color-accent-orange)",
+                        }}
+                      >
+                        <PaperClipIcon
+                          className="h-3 w-3 mr-2"
+                          style={{ color: "var(--color-accent-orange)" }}
+                        />
+                        <span
+                          className="truncate max-w-32"
+                          style={{ color: "var(--color-accent-orange)" }}
+                        >
+                          {file.name}
+                        </span>
+                        <button
+                          onClick={() => removeAttachment(index)}
+                          className="ml-2"
+                          style={{ color: "var(--color-accent-orange)" }}
+                        >
+                          <XMarkIcon className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Chat input */}
+              <div className="flex items-center space-x-4">
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    onFocus={() => {
+                      if (!selectedCaseId) {
+                        setShowCaseSelector(true);
+                      }
+                    }}
+                    placeholder={
+                      selectedCaseId
+                        ? "Ask me anything about your legal case..."
+                        : "Select a case first..."
+                    }
+                    className="w-full px-6 py-4 rounded-full border-0 focus:outline-none"
+                    style={{
+                      backgroundColor: "var(--color-gray-light)",
+                      color: "var(--color-text-primary)",
+                    }}
+                    disabled={isProcessing}
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  {selectedCaseId && (
+                    <button
+                      onClick={() => setShowCaseSelector(!showCaseSelector)}
+                      className="p-3 rounded-full transition-all duration-200 hover:bg-gray-200"
+                      style={{ color: "var(--color-gray-medium)" }}
+                      title="Change case"
+                    >
+                      <svg
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                    </button>
+                  )}
+                  <label
+                    className="cursor-pointer p-3 rounded-full transition-all duration-200 hover:bg-gray-200"
+                    style={{ color: "var(--color-gray-medium)" }}
+                  >
+                    <PaperClipIcon className="h-5 w-5" />
+                    <input
+                      type="file"
+                      multiple
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  <button
+                    onClick={handleSendMessage}
+                    disabled={
+                      isProcessing || !chatInput.trim() || !selectedCaseId
+                    }
+                    className="px-6 py-4 text-white rounded-full transition-all duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                    style={{ backgroundColor: "var(--color-accent-orange)" }}
+                  >
+                    {isProcessing ? (
+                      <span>Sending...</span>
+                    ) : (
+                      <>
+                        <span>Send</span>
+                        <PaperAirplaneIcon className="h-5 w-5" />
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Hint text */}
+              <div
+                className="mt-3 text-xs text-center"
+                style={{ color: "var(--color-gray-medium)" }}
+              >
+                {selectedCaseId ? (
+                  <>
+                    Chatting about:{" "}
+                    <span className="font-medium text-orange-600">
+                      {cases.find((c) => c.case_id === selectedCaseId)
+                        ?.case_name || selectedCaseId}
+                    </span>{" "}
+                    • Drag and drop files here or click the attachment icon
+                  </>
+                ) : (
+                  "Select a case above to start chatting with your AI assistant"
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

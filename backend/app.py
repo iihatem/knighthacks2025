@@ -1023,10 +1023,27 @@ def test_embedding():
 @app.route('/api/agent/process', methods=['POST'])
 def process_with_agent():
     """
-    Process a task using the AI orchestrator
+    Process user query with AI orchestrator agent (with session management)
     
-    Request: {"case_id": "123", "query": "Draft email to client about settlement"}
-    Response: {"status": "success", "result": {...}}
+    Request: {
+        "case_id": "case-123",
+        "query": "Research similar slip and fall cases",
+        "session_id": "sess-20251026-abc" (optional - to continue existing session)
+    }
+    
+    Response: {
+        "status": "success",
+        "result": {
+            "session_id": "sess-xyz",
+            "is_continuation": true/false,
+            "topic": "...",
+            "action_type": "research_internal|draft_email|...",
+            "requires_approval": true/false,
+            "result": "...",
+            "activity_logged": true/false,
+            "activity_id": "act-xyz" (if logged)
+        }
+    }
     """
     try:
         from agents.orchistrator_agent.agent import orchestrator
@@ -1034,6 +1051,7 @@ def process_with_agent():
         data = request.json
         case_id = data.get('case_id')
         query = data.get('query')
+        session_id = data.get('session_id')  # Optional - for continuing sessions
         
         if not case_id or not query:
             return jsonify({"status": "error", "message": "Missing case_id or query"}), 400
@@ -1046,8 +1064,8 @@ def process_with_agent():
         except:
             pass
         
-        # Run orchestrator
-        result = orchestrator(case_id, query, case_context)
+        # Run orchestrator with session support
+        result = orchestrator(case_id, query, case_context, session_id=session_id)
         
         return jsonify({"status": "success", "result": result}), 200
         
@@ -1058,6 +1076,186 @@ def process_with_agent():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-# --- 6. RUN THE SERVER ---
+# --- 6. AGENT ACTIVITY LOGGING & APPROVAL ---
+
+@app.route('/api/activities/<case_id>', methods=['GET'])
+def get_activities(case_id):
+    """
+    Get all agent activities for a case
+    
+    Query params:
+        status: Optional filter (pending, approved, rejected, completed)
+    
+    Response: List of activities sorted by newest first
+    """
+    try:
+        from services.activity_logger import get_case_activities
+        
+        status = request.args.get('status')  # Optional filter
+        activities = get_case_activities(case_id, status)
+        
+        return jsonify({
+            "case_id": case_id,
+            "total_activities": len(activities),
+            "activities": activities
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error in /activities: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/activities/<activity_id>/approve', methods=['POST'])
+def approve_activity(activity_id):
+    """
+    Approve a pending activity
+    
+    Request: {"approved_by": "lawyer@firm.com"}
+    Response: {"status": "success"}
+    """
+    try:
+        from services.activity_logger import update_activity_status
+        
+        data = request.json or {}
+        approved_by = data.get('approved_by', 'unknown')
+        
+        success = update_activity_status(
+            activity_id,
+            status='approved',
+            approved_by=approved_by
+        )
+        
+        if success:
+            return jsonify({"status": "success", "message": f"Activity {activity_id} approved"}), 200
+        else:
+            return jsonify({"status": "error", "message": "Failed to approve activity"}), 500
+            
+    except Exception as e:
+        app.logger.error(f"Error approving activity: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/activities/<activity_id>/reject', methods=['POST'])
+def reject_activity(activity_id):
+    """
+    Reject a pending activity
+    
+    Request: {"approved_by": "lawyer@firm.com", "reason": "Not appropriate"}
+    Response: {"status": "success"}
+    """
+    try:
+        from services.activity_logger import update_activity_status
+        
+        data = request.json or {}
+        approved_by = data.get('approved_by', 'unknown')
+        reason = data.get('reason', '')
+        
+        success = update_activity_status(
+            activity_id,
+            status='rejected',
+            approved_by=approved_by,
+            execution_result=f"Rejected: {reason}"
+        )
+        
+        if success:
+            return jsonify({"status": "success", "message": f"Activity {activity_id} rejected"}), 200
+        else:
+            return jsonify({"status": "error", "message": "Failed to reject activity"}), 500
+            
+    except Exception as e:
+        app.logger.error(f"Error rejecting activity: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/activities/pending', methods=['GET'])
+def get_all_pending():
+    """
+    Get all pending activities across all cases
+    Useful for a global "pending approvals" dashboard
+    """
+    try:
+        from services.activity_logger import get_pending_activities
+        
+        activities = get_pending_activities()
+        
+        return jsonify({
+            "total_pending": len(activities),
+            "activities": activities
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error getting pending activities: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# --- 7. SESSION MANAGEMENT ---
+
+@app.route('/api/sessions/<case_id>', methods=['GET'])
+def get_sessions(case_id):
+    """
+    Get all conversation sessions for a case
+    
+    Query params:
+        status: Optional filter (active, completed)
+    """
+    try:
+        from services.session_manager import get_case_sessions
+        
+        status = request.args.get('status')
+        sessions = get_case_sessions(case_id, status)
+        
+        return jsonify({
+            "case_id": case_id,
+            "total_sessions": len(sessions),
+            "sessions": sessions
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error getting sessions: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/sessions/<session_id>/messages', methods=['GET'])
+def get_session_conversation(session_id):
+    """
+    Get all messages in a session (conversation history)
+    """
+    try:
+        from services.session_manager import get_session_messages
+        
+        messages = get_session_messages(session_id)
+        
+        return jsonify({
+            "session_id": session_id,
+            "message_count": len(messages),
+            "messages": messages
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error getting session messages: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/sessions/<session_id>/end', methods=['POST'])
+def end_conversation(session_id):
+    """
+    Mark a session as completed
+    """
+    try:
+        from services.session_manager import end_session
+        
+        success = end_session(session_id, status='completed')
+        
+        if success:
+            return jsonify({"status": "success", "message": f"Session {session_id} ended"}), 200
+        else:
+            return jsonify({"status": "error", "message": "Failed to end session"}), 500
+            
+    except Exception as e:
+        app.logger.error(f"Error ending session: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# --- 8. RUN THE SERVER ---
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

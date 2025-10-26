@@ -3,6 +3,7 @@ import uuid
 import boto3
 import pdfplumber
 import io
+import asyncio
 import google.generativeai as genai
 import snowflake.connector
 from flask import Flask, request, jsonify, render_template, send_from_directory
@@ -17,6 +18,12 @@ load_dotenv()
 # but Flask setup is the same.
 app = Flask(__name__)
 CORS(app) # Allow cross-origin requests (from your Next.js app)
+
+# Import A2A orchestrator
+from agents.orchestrator.host_agent import get_orchestrator, shutdown_orchestrator
+
+# Global orchestrator instance
+_orchestrator = None
 
 # Configure Gemini
 try:
@@ -1434,13 +1441,81 @@ def process_with_agent():
         except:
             pass
         
-        # Run orchestrator with session support
-        result = orchestrator(case_id, query, case_context, session_id=session_id)
+        # Get or initialize orchestrator
+        global _orchestrator
+        if _orchestrator is None:
+            _orchestrator = asyncio.run(get_orchestrator())
         
-        return jsonify({
-            "status": "success",
-            **result  # Spread all orchestrator results into response
-        }), 200
+        # Get recent messages for context (from session manager)
+        recent_messages = []
+        if session_id:
+            from services.session_manager import get_recent_messages
+            try:
+                recent_messages_data = get_recent_messages(session_id, count=5)
+                recent_messages = [
+                    {'role': msg['role'], 'content': msg['content']}
+                    for msg in recent_messages_data
+                ]
+            except:
+                pass
+        
+        # Run A2A orchestrator
+        result = asyncio.run(_orchestrator.process(
+            case_id=case_id,
+            query=query,
+            case_context=case_context,
+            session_id=session_id,
+            recent_messages=recent_messages
+        ))
+        
+        # Debug: Log orchestrator result
+        app.logger.info(f"Orchestrator result: {result}")
+        app.logger.info(f"Result content length: {len(result.get('result', ''))}")
+        app.logger.info(f"Requires approval: {result.get('requires_approval')}")
+        
+        # Store messages in session manager if session exists
+        if result.get('session_id'):
+            from services.session_manager import store_message, create_session, get_active_session
+            try:
+                current_session = result['session_id']
+                
+                # Create session if it doesn't exist
+                if not session_id:
+                    active = get_active_session(case_id)
+                    if not active:
+                        current_session = create_session(
+                            case_id=case_id,
+                            agent_type=result.get('agent_type', 'Orchestrator'),
+                            topic=result.get('action_type', 'General query')
+                        )
+                        result['session_id'] = current_session
+                
+                # Store messages
+                store_message(result['session_id'], 'user', query)
+                store_message(result['session_id'], 'agent', result.get('result', ''))
+            except Exception as e:
+                app.logger.warning(f"Failed to store messages in session: {e}")
+        
+        # Log activity if requires approval
+        if result.get('requires_approval') and result.get('metadata'):
+            from services.activity_logger import log_agent_activity
+            try:
+                activity_id = log_agent_activity(
+                    case_id=case_id,
+                    agent_type=result.get('agent_type', 'Unknown'),
+                    agent_action=result.get('action_type', 'unknown'),
+                    prompt=query,
+                    agent_response=result.get('result', ''),
+                    action_data=result.get('metadata', {}),
+                    requires_approval=True,
+                    session_id=result.get('session_id')
+                )
+                result['activity_id'] = activity_id
+                result['activity_logged'] = True
+            except Exception as e:
+                app.logger.warning(f"Failed to log activity: {e}")
+        
+        return jsonify(result), 200
         
     except Exception as e:
         import traceback

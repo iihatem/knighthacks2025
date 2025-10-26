@@ -4,9 +4,13 @@ flask
 flask-cors
 requests
 
-# Google AI
+# Google AI & ADK
 google-genai==1.46.0
 google-generativeai==0.8.5
+google-adk
+
+# A2A Protocol
+a2a-sdk
 
 # Salesforce
 simple-salesforce==1.12.6
@@ -18,6 +22,11 @@ boto3
 # Document processing
 pdfplumber
 Pillow
+
+# Web server for A2A agents
+uvicorn
+starlette
+httpx
 
 # Other (from original)
 yfinance==0.2.56

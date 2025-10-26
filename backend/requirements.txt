@@ -5,3 +5,10 @@ litellm==1.66.3
 google-genai==1.46.0
 python-dotenv==1.1.0
 google-generativeai==0.8.5
+flask
+flask-cors
+snowflake-connector-python
+boto3
+pdfplumber
+Pillow
+requests

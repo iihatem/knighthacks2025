@@ -35,6 +35,7 @@ export default function Home() {
             Track changes in case progress over time and access detailed data on
             each case and outcomes.
           </p>
+        </div>
 
           {/* Chart placeholder */}
           <div className="mb-6">

@@ -1,14 +1,25 @@
-# google-adk[database]==0.3.0
+# Core dependencies
+python-dotenv==1.1.0
+flask
+flask-cors
+requests
+
+# Google AI
+google-genai==1.46.0
+google-generativeai==0.8.5
+
+# Salesforce
+simple-salesforce==1.12.6
+
+# Database & Storage  
+snowflake-connector-python
+boto3
+
+# Document processing
+pdfplumber
+Pillow
+
+# Other (from original)
 yfinance==0.2.56
 psutil==6.1.1
 litellm==1.66.3
-google-genai==1.46.0
-python-dotenv==1.1.0
-google-generativeai==0.8.5
-flask
-flask-cors
-snowflake-connector-python
-boto3
-pdfplumber
-Pillow
-requests

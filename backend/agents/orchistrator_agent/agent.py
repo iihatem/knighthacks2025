@@ -1,64 +1,74 @@
-from google.adk.agents import Agent
-from google.adk.tools import google_search
-from google.adk.tools.agent_tool import AgentTool
-from .sub_agents.client_communication_agent.agent import client_communication_agent
-from .sub_agents.records_wrangler_agent.agent import records_wrangler_agent
-from .sub_agents.legal_researcher_agent.agent import legal_researcher_agent
-from .sub_agents.voice_scheduler_agent.agent import voice_scheduler_agent
-from .sub_agents.evidence_sorter_agent.agent import evidence_sorter_agent
+"""Orchestrator Agent - Main coordinator for legal case processing"""
+import os
+import google.generativeai as genai
+from agents.orchistrator_agent.sub_agents.client_communication_agent.agent import client_communication_guru
+from tools.salesforce_tools import salesforce_create_task, salesforce_update_case
 
-root_agent = Agent(
-    name="orchistrator_agent",
-    model="gemini-2.5-flash",
-    description="A basic agent that can answer questions and perform tasks",
-    instruction="""You are the Orchestrator Agent, the central coordinator for all legal case management operations. You serve as the primary interface that routes tasks to specialized agents and manages the overall workflow.
+def orchestrator(case_id: str, query: str, case_context: str = "") -> dict:
+    """
+    Main orchestrator that routes tasks to specialist agents
+    
+    Args:
+        case_id: The case ID
+        query: User's request
+        case_context: RAG context about the case
+    
+    Returns:
+        dict with response and proposed actions
+    """
+    
+    # Configure Gemini
+    genai.configure(api_key=os.getenv('GEMINI_API_KEY'))
+    model = genai.GenerativeModel('gemini-2.5-flash')
+    
+    # Analyze the request
+    analysis_prompt = f"""You are the Orchestrator for Morgan & Morgan legal AI system.
 
-Your primary responsibilities include:
+Case ID: {case_id}
+Case Context: {case_context}
+User Request: {query}
 
-1. TASK ROUTING AND COORDINATION:
-   - Analyze incoming requests and determine which specialized agent should handle each task
-   - Route client communications to the Client Communication Agent
-   - Direct evidence processing to the Evidence Sorter Agent
-   - Assign research tasks to the Legal Researcher Agent
-   - Coordinate scheduling with the Voice Scheduler Agent
-   - Manage record requests through the Records Wrangler Agent
+Analyze this request and determine:
+1. What type of task is this? (client communication, case update, task creation)
+2. Which action should be taken?
 
-2. WORKFLOW MANAGEMENT:
-   - Monitor the status of all ongoing tasks across specialized agents
-   - Ensure tasks are completed within established timelines
-   - Identify bottlenecks and resource conflicts
-   - Coordinate handoffs between different agents when necessary
-   - Maintain a comprehensive view of all case activities
+Respond in JSON format:
+{{
+  "task_type": "client_communication" or "case_update" or "create_task",
+  "reasoning": "why this classification",
+  "recommended_action": "what to do"
+}}
+"""
 
-3. QUALITY ASSURANCE:
-   - Review outputs from specialized agents for completeness and accuracy
-   - Ensure all tasks meet quality standards before delivery
-   - Verify that client requirements are fully addressed
-   - Check for consistency across different agent outputs
-
-4. COMMUNICATION COORDINATION:
-   - Serve as the central point of communication for complex multi-agent workflows
-   - Provide status updates to legal staff and clients
-   - Escalate issues that require human intervention
-   - Coordinate responses that require input from multiple agents
-
-5. SYSTEM OPTIMIZATION:
-   - Monitor agent performance and identify improvement opportunities
-   - Suggest process improvements based on workflow patterns
-   - Ensure optimal resource allocation across agents
-   - Maintain logs of all orchestrated activities for analysis
-
-6. DECISION MAKING:
-   - Make routing decisions based on task complexity and agent capabilities
-   - Determine when to involve human legal staff
-   - Assess priority levels for different tasks
-   - Handle exceptions and edge cases in the workflow
-
-Remember: You are the conductor of the legal AI orchestra. Your role is to ensure smooth, efficient, and effective coordination of all specialized agents to deliver exceptional legal services.""",
-    # tools=[google_search],
-    tools=[
-      AgentTool(legal_researcher_agent),
-    ],
-    sub_agents=[client_communication_agent, records_wrangler_agent, voice_scheduler_agent, evidence_sorter_agent]
-
-)
+    analysis = model.generate_content(analysis_prompt)
+    
+    # Extract text from Gemini response
+    analysis_text = analysis.candidates[0].content.parts[0].text
+    
+    # Route to appropriate specialist based on query
+    if "email" in query.lower() or "message" in query.lower() or "update client" in query.lower():
+        # Route to Client Communication Guru
+        result = client_communication_guru(case_context, query)
+        return {
+            'status': 'success',
+            'orchestrator_analysis': analysis_text,
+            'delegated_to': 'ClientCommunicationGuru',
+            'proposed_actions': [result]
+        }
+    
+    elif "task" in query.lower() or "create" in query.lower():
+        # Create Salesforce task
+        task_result = salesforce_create_task(case_id, query, query)
+        return {
+            'status': 'success',
+            'orchestrator_analysis': analysis_text,
+            'action_taken': task_result
+        }
+    
+    else:
+        # Generic response
+        return {
+            'status': 'success',
+            'orchestrator_analysis': analysis_text,
+            'message': 'Request received. Please specify if you need email draft or task creation.'
+        }

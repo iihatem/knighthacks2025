@@ -515,10 +515,14 @@ def create_case():
                     app.logger.info(f"✅ Created embedding ({len(vector)} dimensions) for PDF image")
                     
                     # Store with metadata indicating it's from a PDF
+                    # Include metadata only if this is the first chunk overall
                     image_source_url = f"{source_url}#page={img_data['page']}&image={img_data['index']}"
-                    success = store_in_snowflake(case_id, image_source_url, img_description, vector)
+                    metadata_to_store = case_metadata if files_processed == 0 and len(chunks) == 0 else None
+                    success = store_in_snowflake(case_id, image_source_url, img_description, vector, metadata_to_store)
                     if success:
                         app.logger.info(f"✅ Stored PDF image description (page {img_data['page']})")
+                        if files_processed == 0 and len(chunks) == 0:
+                            files_processed += 1
                     else:
                         app.logger.error(f"❌ Failed to store PDF image description")
 
@@ -537,7 +541,9 @@ def create_case():
                     app.logger.error(f"❌ Failed to create embedding for image description")
                 else:
                     app.logger.info(f"✅ Created embedding ({len(vector)} dimensions)")
-                    success = store_in_snowflake(case_id, source_url, description, vector)
+                    # Store with metadata (only first file gets full metadata to avoid duplication)
+                    metadata_to_store = case_metadata if files_processed == 0 else None
+                    success = store_in_snowflake(case_id, source_url, description, vector, metadata_to_store)
                     if success:
                         app.logger.info(f"✅ Stored image description for {filename}")
                         files_processed += 1
@@ -761,6 +767,34 @@ def view_case_data(case_id):
         cursor = conn.cursor()
         
         try:
+            # First, get case metadata
+            cursor.execute(
+                """
+                SELECT 
+                    MAX(case_number) as case_number,
+                    MAX(case_name) as case_name,
+                    MAX(client_name) as client_name,
+                    MAX(client_phone) as client_phone,
+                    MAX(client_email) as client_email
+                FROM case_data
+                WHERE case_id = %s
+                """,
+                (case_id,)
+            )
+            
+            metadata_row = cursor.fetchone()
+            
+            if not metadata_row or not metadata_row[0]:
+                return jsonify({"error": "Case not found"}), 404
+            
+            case_metadata = {
+                'case_number': metadata_row[0],
+                'case_name': metadata_row[1],
+                'client_name': metadata_row[2],
+                'client_phone': metadata_row[3],
+                'client_email': metadata_row[4]
+            }
+            
             # Get all data for this case
             cursor.execute(
                 """
@@ -789,6 +823,7 @@ def view_case_data(case_id):
             
             return jsonify({
                 "case_id": case_id,
+                "case_metadata": case_metadata,
                 "total_chunks": len(formatted_results),
                 "data": formatted_results
             }), 200
@@ -828,7 +863,7 @@ def list_cases():
                     MIN(source_url) as first_file
                 FROM case_data
                 GROUP BY case_id
-                ORDER BY MAX(case_number) DESC
+                ORDER BY case_number DESC
                 """
             )
             

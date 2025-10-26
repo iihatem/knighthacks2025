@@ -4,9 +4,11 @@ import Dashboard from "@/components/Dashboard";
 import Link from "next/link";
 import AddCaseModal from "@/components/AddCaseModal";
 import { useState } from "react";
+import { useCases } from "@/hooks/useCases";
 
 export default function CasesPage() {
   const [isAddCaseModalOpen, setIsAddCaseModalOpen] = useState(false);
+  const { cases, loading, error, refetch } = useCases();
 
   return (
     <Dashboard>
@@ -298,6 +300,9 @@ export default function CasesPage() {
       <AddCaseModal
         isOpen={isAddCaseModalOpen}
         onClose={() => setIsAddCaseModalOpen(false)}
+        onSuccess={() => {
+          refetch(); // Refresh the cases list
+        }}
       />
     </Dashboard>
   );

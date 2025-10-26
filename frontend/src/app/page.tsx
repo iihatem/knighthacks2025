@@ -4,13 +4,54 @@ import Dashboard from "@/components/Dashboard";
 import Link from "next/link";
 import AddCaseModal from "@/components/AddCaseModal";
 import { useState } from "react";
+import { useCases } from "@/hooks/useCases";
 
 export default function Home() {
   const [isAddCaseModalOpen, setIsAddCaseModalOpen] = useState(false);
+  const { cases, loading, error, refetch } = useCases();
+
+  // Get today's date in the required format
+  const getTodayDate = () => {
+    const today = new Date();
+    const options: Intl.DateTimeFormatOptions = {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    };
+    const formattedDate = today.toLocaleDateString("en-US", options);
+    // Convert to ordinal format (1st, 2nd, 3rd, etc.)
+    const day = today.getDate();
+    const ordinal =
+      day === 1 || day === 21 || day === 31
+        ? "st"
+        : day === 2 || day === 22
+        ? "nd"
+        : day === 3 || day === 23
+        ? "rd"
+        : "th";
+    return formattedDate.replace(/\d+/, day + ordinal);
+  };
 
   return (
     <Dashboard>
       <div className="space-y-6">
+        {/* User Welcome Section */}
+        <div className="flex items-center space-x-4 py-6">
+          {/* User Profile Picture */}
+          <div className="w-32 h-32 bg-gradient-to-br from-orange-400 to-orange-600 rounded-full flex items-center justify-center">
+            <span className="text-white text-4xl font-semibold">JD</span>
+          </div>
+
+          {/* Welcome Message */}
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">
+              Welcome, John Doe!
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">{getTodayDate()}</p>
+          </div>
+        </div>
+
         {/* Two Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Recent Cases */}
@@ -299,6 +340,9 @@ export default function Home() {
       <AddCaseModal
         isOpen={isAddCaseModalOpen}
         onClose={() => setIsAddCaseModalOpen(false)}
+        onSuccess={() => {
+          refetch(); // Refresh the cases list
+        }}
       />
     </Dashboard>
   );

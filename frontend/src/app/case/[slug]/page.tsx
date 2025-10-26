@@ -1,382 +1,371 @@
+"use client";
+
 import Dashboard from "@/components/Dashboard";
-import { notFound } from "next/navigation";
+import ApprovalCard from "@/components/ApprovalCard";
+import { useCaseData } from "@/hooks/useCases";
+import { useState, useRef, useEffect, use } from "react";
+import { PaperAirplaneIcon, PaperClipIcon } from "@heroicons/react/24/outline";
+import { processWithAgent } from "@/lib/api";
+import { getActivities, approveActivity, rejectActivity } from "@/lib/api";
 
 interface CasePageProps {
-  params: {
+  params: Promise<{
     slug: string;
-  };
+  }>;
 }
 
-// Sample case data - in a real app, this would come from an API
-const caseData: Record<string, any> = {
-  "personal-injury-case": {
-    title: "Personal Injury Case",
-    client: "John Smith",
-    status: "Active",
-    type: "Personal Injury",
-    filedDate: "2 days ago",
-    description:
-      "Motor vehicle accident case involving rear-end collision on Highway 101.",
-    priority: "High",
-    documents: 12,
-    lastActivity: "2 hours ago",
-  },
-  "contract-dispute": {
-    title: "Contract Dispute",
-    client: "ABC Corp",
-    status: "Pending",
-    type: "Contract Law",
-    filedDate: "1 week ago",
-    description:
-      "Breach of contract dispute regarding software development agreement.",
-    priority: "Medium",
-    documents: 8,
-    lastActivity: "1 day ago",
-  },
-  "employment-law": {
-    title: "Employment Law",
-    client: "Jane Doe",
-    status: "Completed",
-    type: "Employment Law",
-    filedDate: "2 weeks ago",
-    description: "Wrongful termination case settled out of court.",
-    priority: "Low",
-    documents: 15,
-    lastActivity: "1 week ago",
-  },
-  "johnson-vs-abc-corp": {
-    title: "Johnson vs. ABC Corp",
-    client: "Johnson",
-    status: "Active",
-    type: "Contract Dispute",
-    filedDate: "2 days ago",
-    description: "Contract dispute regarding payment terms and deliverables.",
-    priority: "High",
-    documents: 6,
-    lastActivity: "4 hours ago",
-  },
-  "smith-estate-planning": {
-    title: "Smith Estate Planning",
-    client: "Smith Family",
-    status: "Completed",
-    type: "Estate Law",
-    filedDate: "1 week ago",
-    description:
-      "Comprehensive estate planning including will and trust documents.",
-    priority: "Medium",
-    documents: 22,
-    lastActivity: "3 days ago",
-  },
-  "davis-personal-injury": {
-    title: "Davis Personal Injury",
-    client: "Davis",
-    status: "Urgent",
-    type: "Personal Injury",
-    filedDate: "3 days ago",
-    description:
-      "Slip and fall accident at commercial property requiring immediate attention.",
-    priority: "Urgent",
-    documents: 4,
-    lastActivity: "1 hour ago",
-  },
-};
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  timestamp: Date;
+  action_type?: string;
+  requires_approval?: boolean;
+  activity_id?: string;
+}
 
 export default function CasePage({ params }: CasePageProps) {
-  const caseInfo = caseData[params.slug];
+  const { slug } = use(params);
+  const caseId = slug;
 
-  if (!caseInfo) {
-    notFound();
+  // Early return if no caseId
+  if (!caseId) {
+    return (
+      <Dashboard>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-600">Loading case...</div>
+        </div>
+      </Dashboard>
+    );
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "active":
-        return "bg-green-100 text-green-800";
-      case "pending":
-        return "bg-yellow-100 text-yellow-800";
-      case "completed":
-        return "bg-blue-100 text-blue-800";
-      case "urgent":
-        return "bg-red-100 text-red-800";
-      default:
-        return "bg-gray-100 text-gray-800";
+  const { caseData: apiCaseData, loading, error } = useCaseData(caseId);
+
+  const [chatInput, setChatInput] = useState("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [pendingActivities, setPendingActivities] = useState<any[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom of chat
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages]);
+
+  // Fetch pending activities on mount
+  useEffect(() => {
+    if (caseId) {
+      fetchPendingActivities();
+    }
+  }, [caseId]);
+
+  const fetchPendingActivities = async () => {
+    try {
+      const response = await getActivities(caseId, "pending");
+      setPendingActivities(response.activities || []);
+    } catch (error) {
+      console.error("Error fetching activities:", error);
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority.toLowerCase()) {
-      case "urgent":
-        return "bg-red-100 text-red-800";
-      case "high":
-        return "bg-orange-100 text-orange-800";
-      case "medium":
-        return "bg-yellow-100 text-yellow-800";
-      case "low":
-        return "bg-green-100 text-green-800";
-      default:
-        return "bg-gray-100 text-gray-800";
+  // Get case name from API data
+  const caseName = apiCaseData?.case_metadata?.case_name || "Loading case...";
+  const clientName = apiCaseData?.case_metadata?.client_name || "";
+
+  // Format case display name with null safety
+  const displayCaseName =
+    caseName !== "Loading case..."
+      ? caseName
+      : caseId
+      ? caseId.replace("case-", "Case ")
+      : "Loading...";
+
+  const handleSendMessage = async () => {
+    if (!chatInput.trim() || isProcessing) return;
+
+    const userMessage: ChatMessage = {
+      id: Date.now().toString(),
+      role: "user",
+      content: chatInput,
+      timestamp: new Date(),
+    };
+
+    setChatMessages((prev) => [...prev, userMessage]);
+    const currentInput = chatInput;
+    setChatInput("");
+    setIsProcessing(true);
+
+    try {
+      // Call the real API
+      const response = await processWithAgent({
+        case_id: caseId,
+        query: currentInput,
+        session_id: sessionId || undefined,
+      });
+
+      // Update session ID
+      if (response.session_id) {
+        setSessionId(response.session_id);
+      }
+
+      // Add AI response to chat
+      const assistantMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content:
+          typeof response.result === "string"
+            ? response.result
+            : JSON.stringify(response.result, null, 2),
+        timestamp: new Date(),
+        action_type: response.action_type,
+        requires_approval: response.requires_approval,
+        activity_id: response.activity_id,
+      };
+
+      setChatMessages((prev) => [...prev, assistantMessage]);
+
+      // If requires approval, fetch updated activities
+      if (response.requires_approval && response.activity_logged) {
+        await fetchPendingActivities();
+      }
+    } catch (error) {
+      console.error("Error processing message:", error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "system",
+        content: `Error: ${
+          error instanceof Error ? error.message : "Failed to process message"
+        }`,
+        timestamp: new Date(),
+      };
+      setChatMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsProcessing(false);
     }
   };
+
+  const handleApprove = async (activityId: string) => {
+    try {
+      await approveActivity(activityId, "lawyer@firm.com");
+
+      // Add system message
+      const systemMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: "system",
+        content: "✅ Action approved and executed!",
+        timestamp: new Date(),
+      };
+      setChatMessages((prev) => [...prev, systemMessage]);
+
+      // Refresh activities
+      await fetchPendingActivities();
+    } catch (error) {
+      console.error("Error approving activity:", error);
+      alert("Failed to approve activity");
+    }
+  };
+
+  const handleReject = async (activityId: string, reason: string) => {
+    try {
+      await rejectActivity(activityId, "lawyer@firm.com", reason);
+
+      // Add system message
+      const systemMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: "system",
+        content: "❌ Action rejected. You can ask me to revise it.",
+        timestamp: new Date(),
+      };
+      setChatMessages((prev) => [...prev, systemMessage]);
+
+      // Refresh activities
+      await fetchPendingActivities();
+    } catch (error) {
+      console.error("Error rejecting activity:", error);
+      alert("Failed to reject activity");
+    }
+  };
+
+  if (loading) {
+    return (
+      <Dashboard>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-gray-600">Loading case...</div>
+        </div>
+      </Dashboard>
+    );
+  }
+
+  if (error) {
+    return (
+      <Dashboard>
+        <div className="flex items-center justify-center h-64">
+          <div className="text-red-600">Error loading case: {error}</div>
+        </div>
+      </Dashboard>
+    );
+  }
 
   return (
     <Dashboard>
       <div className="space-y-6">
-        {/* Case Header */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-800 mb-2">
-                {caseInfo.title}
-              </h1>
-              <p className="text-gray-600 mb-4">{caseInfo.description}</p>
-              <div className="flex items-center space-x-4">
-                <div>
-                  <span className="text-sm text-gray-500">Client:</span>
-                  <span className="ml-2 font-medium text-gray-800">
-                    {caseInfo.client}
-                  </span>
+        {/* Case Title - Small, Top Left */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-semibold text-gray-800">
+              {displayCaseName}
+            </h1>
+            {clientName && (
+              <p className="text-sm text-gray-500 mt-1">Client: {clientName}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Chat Interface - Centered */}
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white rounded-3xl shadow-sm border border-gray-200 p-6">
+            {/* Chat Messages */}
+            <div className="h-96 overflow-y-auto mb-4 space-y-4">
+              {chatMessages.length === 0 && (
+                <div className="text-center text-gray-500 mt-10">
+                  <p className="text-lg font-medium mb-2">
+                    👋 Hi! I'm your AI legal assistant
+                  </p>
+                  <p className="text-sm">
+                    Ask me to research case law, draft emails, schedule
+                    appointments, or anything else!
+                  </p>
+                  <div className="mt-6 text-left bg-gray-50 rounded-lg p-4">
+                    <p className="text-sm font-medium text-gray-700 mb-2">
+                      Try asking:
+                    </p>
+                    <ul className="text-sm text-gray-600 space-y-1">
+                      <li>• "What injuries did the client suffer?"</li>
+                      <li>
+                        • "Draft an email to the client about the settlement"
+                      </li>
+                      <li>
+                        • "Schedule a meeting with the client for Thursday"
+                      </li>
+                      <li>• "Research similar slip and fall cases"</li>
+                    </ul>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-sm text-gray-500">Type:</span>
-                  <span className="ml-2 font-medium text-gray-800">
-                    {caseInfo.type}
-                  </span>
+              )}
+
+              {chatMessages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${
+                    message.role === "user" ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  <div
+                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-2xl ${
+                      message.role === "user"
+                        ? "bg-orange-500 text-white"
+                        : message.role === "system"
+                        ? "bg-gray-200 text-gray-800 italic"
+                        : "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap">{message.content}</p>
+                    <span
+                      className={`block text-right text-xs mt-1 ${
+                        message.role === "user"
+                          ? "text-orange-100"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      {message.timestamp.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    {message.requires_approval && (
+                      <div className="mt-2 pt-2 border-t border-gray-300">
+                        <p className="text-xs text-orange-600 font-medium">
+                          ⚠️ Approval required - see below
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <span className="text-sm text-gray-500">Filed:</span>
-                  <span className="ml-2 font-medium text-gray-800">
-                    {caseInfo.filedDate}
-                  </span>
+              ))}
+
+              {isProcessing && (
+                <div className="flex justify-start">
+                  <div className="max-w-xs lg:max-w-md px-4 py-3 rounded-2xl bg-gray-100 text-gray-800">
+                    <div className="flex items-center space-x-2">
+                      <div className="flex space-x-1">
+                        <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"></div>
+                        <div
+                          className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                          style={{ animationDelay: "0.1s" }}
+                        ></div>
+                        <div
+                          className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
+                          style={{ animationDelay: "0.2s" }}
+                        ></div>
+                      </div>
+                      <span className="text-sm">AI is thinking...</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
+
+              <div ref={chatEndRef} />
             </div>
-            <div className="flex flex-col items-end space-y-2">
-              <span
-                className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(
-                  caseInfo.status
-                )}`}
+
+            {/* Chat Input */}
+            <div className="flex items-center space-x-3 border-t border-gray-200 pt-4">
+              <button className="p-2 text-gray-400 hover:text-gray-600 transition-colors">
+                <PaperClipIcon className="h-6 w-6" />
+              </button>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder="Ask me to research, draft emails, schedule appointments..."
+                className="flex-1 px-4 py-3 bg-gray-50 rounded-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 text-gray-800"
+                disabled={isProcessing}
+              />
+              <button
+                onClick={handleSendMessage}
+                className="p-3 bg-orange-500 text-white rounded-full hover:bg-orange-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={isProcessing || !chatInput.trim()}
               >
-                {caseInfo.status}
-              </span>
-              <span
-                className={`px-3 py-1 rounded-full text-sm font-medium ${getPriorityColor(
-                  caseInfo.priority
-                )}`}
-              >
-                {caseInfo.priority} Priority
-              </span>
+                <PaperAirplaneIcon className="h-6 w-6" />
+              </button>
             </div>
           </div>
         </div>
 
-        {/* Case Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center">
-              <div className="p-3 bg-orange-100 rounded-lg">
-                <svg
-                  className="h-6 w-6 text-orange-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Documents</p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {caseInfo.documents}
-                </p>
-              </div>
-            </div>
+        {/* Pending Approvals */}
+        {pendingActivities.length > 0 && (
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">
+              ⚠️ Actions Awaiting Your Approval
+            </h2>
+            {pendingActivities.map((activity) => (
+              <ApprovalCard
+                key={activity.activity_id}
+                activity={activity}
+                onApprove={() => handleApprove(activity.activity_id)}
+                onReject={(reason) =>
+                  handleReject(activity.activity_id, reason)
+                }
+              />
+            ))}
           </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center">
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <svg
-                  className="h-6 w-6 text-blue-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">
-                  Last Activity
-                </p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {caseInfo.lastActivity}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center">
-              <div className="p-3 bg-green-100 rounded-lg">
-                <svg
-                  className="h-6 w-6 text-green-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                  />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Progress</p>
-                <p className="text-2xl font-semibold text-gray-900">
-                  {caseInfo.status === "Completed" ? "100%" : "75%"}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Case Details */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            Case Details
-          </h3>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-500">
-                  Case ID
-                </label>
-                <p className="text-gray-800">
-                  {params.slug.toUpperCase().replace(/-/g, "-")}
-                </p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">
-                  Assigned Attorney
-                </label>
-                <p className="text-gray-800">Sarah Johnson, Esq.</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">
-                  Court
-                </label>
-                <p className="text-gray-800">Superior Court of California</p>
-              </div>
-              <div>
-                <label className="text-sm font-medium text-gray-500">
-                  Next Hearing
-                </label>
-                <p className="text-gray-800">
-                  {caseInfo.status === "Completed"
-                    ? "N/A"
-                    : "December 15, 2024"}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Activity */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            Recent Activity
-          </h3>
-          <div className="space-y-4">
-            <div className="flex items-start">
-              <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3 mt-1">
-                <svg
-                  className="h-4 w-4 text-green-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                  />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <p className="text-sm text-gray-800">
-                  <span className="font-medium">Document uploaded</span> -
-                  Medical records and police report
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {caseInfo.lastActivity}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3 mt-1">
-                <svg
-                  className="h-4 w-4 text-blue-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                  />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <p className="text-sm text-gray-800">
-                  <span className="font-medium">Email sent</span> to client
-                  regarding case updates
-                </p>
-                <p className="text-xs text-gray-500 mt-1">1 day ago</p>
-              </div>
-            </div>
-
-            <div className="flex items-start">
-              <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center mr-3 mt-1">
-                <svg
-                  className="h-4 w-4 text-orange-600"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                  />
-                </svg>
-              </div>
-              <div className="flex-1">
-                <p className="text-sm text-gray-800">
-                  <span className="font-medium">Court filing</span> - Motion for
-                  summary judgment submitted
-                </p>
-                <p className="text-xs text-gray-500 mt-1">3 days ago</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
     </Dashboard>
   );

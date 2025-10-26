@@ -6,10 +6,14 @@ import {
   PaperClipIcon,
   DocumentIcon,
 } from "@heroicons/react/24/outline";
+import { useCreateCase } from "@/hooks/useCases";
+import { useRouter } from "next/navigation";
 
 interface AddCaseModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSuccess?: () => void;
+  redirectToCase?: boolean; // Optional: control whether to redirect
 }
 
 interface CaseFormData {
@@ -20,7 +24,13 @@ interface CaseFormData {
   address: string;
 }
 
-const AddCaseModal: React.FC<AddCaseModalProps> = ({ isOpen, onClose }) => {
+const AddCaseModal: React.FC<AddCaseModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  redirectToCase = true, // Default to true
+}) => {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<CaseFormData>({
     caseName: "",
@@ -32,6 +42,16 @@ const AddCaseModal: React.FC<AddCaseModalProps> = ({ isOpen, onClose }) => {
   const [files, setFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [createdCaseId, setCreatedCaseId] = useState<string | null>(null);
+  const [createdCaseNumber, setCreatedCaseNumber] = useState<string | null>(
+    null
+  );
+
+  const {
+    create,
+    loading: createLoading,
+    error: createError,
+  } = useCreateCase();
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -92,21 +112,54 @@ const AddCaseModal: React.FC<AddCaseModalProps> = ({ isOpen, onClose }) => {
   const handleSubmit = async () => {
     setIsCreating(true);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    try {
+      // Call the actual API
+      const response = await create({
+        case_name: formData.caseName,
+        client_name: formData.clientName,
+        client_phone: formData.clientPhone || undefined,
+        client_email: formData.clientEmail || undefined,
+        files: files.length > 0 ? files : undefined,
+      });
 
-    // Reset form and close modal
-    setFormData({
-      caseName: "",
-      clientName: "",
-      clientPhone: "",
-      clientEmail: "",
-      address: "",
-    });
-    setFiles([]);
-    setCurrentStep(1);
-    setIsCreating(false);
-    onClose();
+      // Store the created case info
+      setCreatedCaseId(response.case_id);
+      setCreatedCaseNumber(response.case_number);
+
+      // Wait a bit to show success animation
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Reset form
+      setFormData({
+        caseName: "",
+        clientName: "",
+        clientPhone: "",
+        clientEmail: "",
+        address: "",
+      });
+      setFiles([]);
+      setCurrentStep(1);
+      setIsCreating(false);
+
+      // Call onSuccess callback if provided
+      if (onSuccess) {
+        onSuccess();
+      }
+
+      // Close modal
+      onClose();
+
+      // Redirect to the case page if enabled
+      if (redirectToCase && response.case_id) {
+        // Convert case_id to slug format (remove "case-" prefix for cleaner URLs)
+        const caseSlug = response.case_id;
+        router.push(`/case/${caseSlug}`);
+      }
+    } catch (error) {
+      console.error("Error creating case:", error);
+      setIsCreating(false);
+      alert(createError || "Failed to create case. Please try again.");
+    }
   };
 
   const handleClose = () => {

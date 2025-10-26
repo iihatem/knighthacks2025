@@ -42,17 +42,15 @@ def log_agent_activity(
         cursor = conn.cursor()
         
         try:
-            # Convert action_data dict to JSON string for VARIANT column
-            import json
-            action_data_json = json.dumps(action_data) if action_data else None
-            
+            # For now, skip action_data to avoid JSON parsing issues
+            # All necessary info is in other columns
             cursor.execute(
                 """
                 INSERT INTO agent_activities (
                     activity_id, case_id, agent_type, agent_action,
-                    activity_status, prompt, agent_response, action_data, requires_approval, session_id
+                    activity_status, prompt, agent_response, requires_approval, session_id
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, PARSE_JSON(%s), %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     activity_id,
@@ -62,7 +60,6 @@ def log_agent_activity(
                     'pending',
                     prompt,
                     agent_response,
-                    action_data_json,
                     requires_approval,
                     session_id
                 )

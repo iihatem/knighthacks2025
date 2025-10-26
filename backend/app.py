@@ -1055,6 +1055,342 @@ def test_embedding():
 
 # --- 5. AI AGENT ORCHESTRATION ---
 
+# --- 5. AI ORCHESTRATOR FUNCTION ---
+
+def orchestrator(case_id: str, query: str, case_context: str = "", session_id: str = None) -> dict:
+    """
+    Main orchestrator that routes tasks to specialist agents with smart session management.
+    This function analyzes user queries and routes them to appropriate handlers.
+    
+    Args:
+        case_id: The case ID
+        query: User's request
+        case_context: RAG context about the case
+        session_id: Optional existing session ID to continue
+    
+    Returns:
+        dict with response, session info, and proposed actions
+    """
+    import json
+    from services.session_manager import (
+        create_session, get_active_session, store_message, 
+        get_recent_messages
+    )
+    from services.activity_logger import log_agent_activity
+    
+    # Configure Gemini
+    model = genai.GenerativeModel('gemini-2.5-flash')
+    
+    # Step 1: Check for existing session or get recent context
+    recent_messages = []
+    current_session = None
+    
+    if session_id:
+        # User provided session - continue it
+        recent_messages = get_recent_messages(session_id, count=5)
+        current_session = session_id
+    else:
+        # Check if there's an active session for this case
+        active_session = get_active_session(case_id)
+        if active_session:
+            current_session = active_session['session_id']
+            recent_messages = get_recent_messages(current_session, count=5)
+    
+    # Step 2: Analyze if this is a new topic or continuation
+    context_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in recent_messages])
+    
+    session_analysis_prompt = f"""You are analyzing a conversation to determine session continuity and required actions.
+
+Recent conversation history (last 5 messages):
+{context_text if context_text else "No previous conversation"}
+
+New user message: "{query}"
+
+Case Context: {case_context}
+
+Determine:
+1. Is this a CONTINUATION of previous conversation or a NEW topic?
+2. What is the main topic/intent?
+3. What action type is needed?
+4. Does this action require approval before execution?
+
+Action types:
+- research_internal: Search case files in RAG database (NO APPROVAL)
+- research_external: Web search, case law databases (NO APPROVAL)  
+- draft_email: Draft email to client/opposing counsel (REQUIRES APPROVAL)
+- schedule_appointment: Schedule deposition/mediation (REQUIRES APPROVAL)
+- general_query: General question, analysis (NO APPROVAL)
+
+Respond in JSON format:
+{{
+  "is_continuation": true or false,
+  "topic": "Brief description of topic",
+  "action_type": "research_internal|research_external|draft_email|schedule_appointment|general_query",
+  "agent_type": "LegalResearcher|ClientCommunicationGuru|VoiceBotScheduler|Orchestrator",
+  "requires_approval": true or false,
+  "reasoning": "Why you made this determination"
+}}
+"""
+
+    analysis = model.generate_content(session_analysis_prompt)
+    analysis_text = analysis.candidates[0].content.parts[0].text
+    
+    # Parse the analysis
+    try:
+        # Try to extract JSON from markdown code blocks if present
+        if "```json" in analysis_text:
+            analysis_text = analysis_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in analysis_text:
+            analysis_text = analysis_text.split("```")[1].split("```")[0].strip()
+        
+        analysis_data = json.loads(analysis_text)
+    except:
+        # Fallback if JSON parsing fails
+        analysis_data = {
+            "is_continuation": False,
+            "topic": "General query",
+            "action_type": "general_query",
+            "agent_type": "Orchestrator",
+            "requires_approval": False,
+            "reasoning": "Failed to parse, defaulting to safe general query"
+        }
+    
+    # Step 3: Session management decision
+    session_mode = 'continue'
+    
+    if current_session and analysis_data.get('is_continuation', False):
+        # Continue existing session
+        session_mode = 'continue'
+    else:
+        # Start new session
+        session_mode = 'new'
+        current_session = create_session(
+            case_id=case_id,
+            agent_type=analysis_data.get('agent_type', 'Orchestrator'),
+            topic=analysis_data.get('topic', 'General query')
+        )
+    
+    # Step 4: Store user message in session
+    store_message(current_session, 'user', query)
+    
+    # Step 5: Route to appropriate agent based on action_type
+    action_type = analysis_data.get('action_type', 'general_query')
+    agent_response = None
+    activity_id = None
+    activity_logged = False
+    
+    if action_type == 'draft_email':
+        # Draft email using Gemini
+        email_prompt = f"""You are a professional legal assistant drafting an email.
+
+Case Context: {case_context}
+User Request: {query}
+
+Draft a professional, empathetic email. Include:
+- Appropriate greeting
+- Clear, concise message body
+- Professional closing
+
+Respond in JSON format:
+{{
+  "to": "recipient email or name",
+  "subject": "email subject line",
+  "draft": "full email body text"
+}}
+"""
+        email_response = model.generate_content(email_prompt)
+        email_text = email_response.candidates[0].content.parts[0].text
+        
+        try:
+            # Try to extract JSON
+            if "```json" in email_text:
+                email_text = email_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in email_text:
+                email_text = email_text.split("```")[1].split("```")[0].strip()
+            
+            agent_response = json.loads(email_text)
+        except:
+            # Fallback
+            agent_response = {
+                'to': 'client@email.com',
+                'subject': 'Case Update',
+                'draft': email_text
+            }
+        
+        # REQUIRES APPROVAL - Log activity immediately
+        activity_id = log_agent_activity(
+            case_id=case_id,
+            agent_type='ClientCommunicationGuru',
+            agent_action='draft_email',
+            prompt=query,
+            agent_response=json.dumps(agent_response),
+            action_data={
+                'draft': agent_response.get('draft', ''),
+                'to': agent_response.get('to', 'Unknown client'),
+                'subject': agent_response.get('subject', 'Case Update')
+            },
+            requires_approval=True,
+            session_id=current_session
+        )
+        activity_logged = True
+        
+        response_message = "I've drafted an email for your approval. Please review it below."
+        
+    elif action_type == 'schedule_appointment':
+        # Schedule appointment using Gemini
+        schedule_prompt = f"""You are a scheduling assistant for a law firm.
+
+User Request: {query}
+Case Context: {case_context}
+
+Extract the appointment details and create a structured response.
+
+Respond in JSON format:
+{{
+  "appointment_type": "Client Meeting|Deposition|Mediation|Court Hearing",
+  "date": "YYYY-MM-DD",
+  "time": "HH:MM",
+  "duration": "X minutes",
+  "attendees": ["person1", "person2"],
+  "notes": "any additional notes"
+}}
+"""
+        schedule_response = model.generate_content(schedule_prompt)
+        schedule_text = schedule_response.candidates[0].content.parts[0].text
+        
+        try:
+            # Try to extract JSON
+            if "```json" in schedule_text:
+                schedule_text = schedule_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in schedule_text:
+                schedule_text = schedule_text.split("```")[1].split("```")[0].strip()
+            
+            agent_response = json.loads(schedule_text)
+        except:
+            # Fallback
+            agent_response = {
+                'appointment_type': 'Client Meeting',
+                'date': '2025-11-01',
+                'time': '14:00',
+                'duration': '60 minutes',
+                'attendees': ['Client', 'Lawyer'],
+                'notes': query
+            }
+        
+        # REQUIRES APPROVAL - Log activity
+        activity_id = log_agent_activity(
+            case_id=case_id,
+            agent_type='VoiceBotScheduler',
+            agent_action='schedule_appointment',
+            prompt=query,
+            agent_response=json.dumps(agent_response),
+            action_data=agent_response,
+            requires_approval=True,
+            session_id=current_session
+        )
+        activity_logged = True
+        
+        response_message = "I've prepared an appointment request for your approval. Please review the details below."
+        
+    elif action_type == 'research_internal':
+        # Research using RAG
+        rag_results = rag_search(case_id, query, top_k=5)
+        
+        if rag_results:
+            # Format results for display
+            formatted_results = "\n\n".join([
+                f"📄 {result['source_url']}\n{result['text_chunk'][:200]}..."
+                for result in rag_results[:3]
+            ])
+            
+            # Use Gemini to synthesize the results
+            synthesis_prompt = f"""Based on the following case documents, answer the user's question.
+
+User Question: {query}
+
+Relevant Documents:
+{formatted_results}
+
+Provide a clear, professional answer based on the documents."""
+
+            synthesis = model.generate_content(synthesis_prompt)
+            response_message = synthesis.candidates[0].content.parts[0].text
+            
+            agent_response = {
+                'action_type': 'research_internal',
+                'results_count': len(rag_results),
+                'sources': [r['source_url'] for r in rag_results[:3]],
+                'answer': response_message
+            }
+        else:
+            response_message = "I couldn't find relevant information in the case files for this query."
+            agent_response = {
+                'action_type': 'research_internal',
+                'results_count': 0,
+                'answer': response_message
+            }
+        
+        # NO approval needed - just store in session
+        
+    elif action_type == 'research_external':
+        # External research (placeholder - would integrate with web search)
+        research_prompt = f"""You are a legal researcher. Provide guidance on researching the following topic:
+
+User Query: {query}
+Case Context: {case_context}
+
+Provide:
+1. Key search terms to use
+2. Relevant legal databases to check
+3. Types of precedents to look for
+4. Initial analysis of the legal issue"""
+
+        research = model.generate_content(research_prompt)
+        response_message = research.candidates[0].content.parts[0].text
+        
+        agent_response = {
+            'action_type': 'research_external',
+            'guidance': response_message
+        }
+        
+        # NO approval needed
+        
+    else:
+        # General query
+        general_prompt = f"""You are a helpful legal AI assistant.
+
+Case Context: {case_context}
+User Question: {query}
+
+Provide a helpful, professional response."""
+
+        general = model.generate_content(general_prompt)
+        response_message = general.candidates[0].content.parts[0].text
+        
+        agent_response = {
+            'message': response_message
+        }
+    
+    # Step 6: Store agent response in session
+    store_message(current_session, 'agent', response_message)
+    
+    # Step 7: Build response
+    return {
+        'session_id': current_session,
+        'session_mode': session_mode,  # 'new' or 'continue'
+        'is_continuation': analysis_data.get('is_continuation', False),
+        'topic': analysis_data.get('topic'),
+        'action_type': action_type,
+        'requires_approval': analysis_data.get('requires_approval', False),
+        'activity_logged': activity_logged,
+        'activity_id': activity_id,  # Only set if approval needed
+        'agent_type': analysis_data.get('agent_type'),
+        'result': response_message,
+        'agent_response': agent_response,
+        'reasoning': analysis_data.get('reasoning')
+    }
+
+
 @app.route('/api/agent/process', methods=['POST'])
 def process_with_agent():
     """
@@ -1068,21 +1404,18 @@ def process_with_agent():
     
     Response: {
         "status": "success",
-        "result": {
-            "session_id": "sess-xyz",
-            "is_continuation": true/false,
-            "topic": "...",
-            "action_type": "research_internal|draft_email|...",
-            "requires_approval": true/false,
-            "result": "...",
-            "activity_logged": true/false,
-            "activity_id": "act-xyz" (if logged)
-        }
+        "session_id": "sess-xyz",
+        "is_continuation": true/false,
+        "topic": "...",
+        "action_type": "research_internal|draft_email|...",
+        "requires_approval": true/false,
+        "result": "...",
+        "activity_logged": true/false,
+        "activity_id": "act-xyz" (if logged)
     }
     """
     try:
-        from agents.orchistrator_agent.agent import orchestrator
-        
+
         data = request.json
         case_id = data.get('case_id')
         query = data.get('query')
@@ -1094,15 +1427,20 @@ def process_with_agent():
         # Get case context from RAG if available
         case_context = ""
         try:
-            # Simple context retrieval - you can enhance this
-            case_context = f"Case {case_id} context"
+            # Get some context from RAG
+            rag_results = rag_search(case_id, query, top_k=3)
+            if rag_results:
+                case_context = "\n".join([r['text_chunk'][:300] for r in rag_results])
         except:
             pass
         
         # Run orchestrator with session support
         result = orchestrator(case_id, query, case_context, session_id=session_id)
         
-        return jsonify({"status": "success", "result": result}), 200
+        return jsonify({
+            "status": "success",
+            **result  # Spread all orchestrator results into response
+        }), 200
         
     except Exception as e:
         import traceback

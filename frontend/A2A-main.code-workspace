@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"name": "A2A-main",
+			"path": "../../../Downloads/A2A-main"
+		},
+		{
+			"name": "knighthacks2025",
+			"path": ".."
+		},
+		{
+			"path": "../../../Downloads/a2a-samples-main/samples/python/agents/airbnb_planner_multiagent"
+		}
+	],
+	"settings": {}
+}

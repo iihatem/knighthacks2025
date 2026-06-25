@@ -1,4 +1,4 @@
-# Aura MM — AI-Powered Legal Case Management
+# Briefly — AI-Powered Legal Case Management
 
 An intelligent legal case management platform built for Morgan & Morgan, featuring multi-agent AI orchestration, document RAG search, and human-in-the-loop approval workflows. Built at Knight Hacks 2025.
 

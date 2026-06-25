@@ -6,7 +6,7 @@ An intelligent legal case management platform built for Morgan & Morgan, featuri
 
 ## Overview
 
-Aura MM assists lawyers and paralegals with end-to-end case management using a fleet of specialized AI agents. From processing evidence and drafting client emails to conducting legal research and scheduling depositions — every sensitive action is routed through an approval workflow before execution.
+Briefly assists lawyers and paralegals with end-to-end case management using a fleet of specialized AI agents. From processing evidence and drafting client emails to conducting legal research and scheduling depositions — every sensitive action is routed through an approval workflow before execution.
 
 ---
 
